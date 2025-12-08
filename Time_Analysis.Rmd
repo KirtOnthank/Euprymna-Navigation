@@ -1,0 +1,35 @@
+---
+title: "Time to escape"
+author: "Kirt Onthank"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Loading Libraries
+```{r Loading Libraries}
+library(xlsx)
+```
+
+
+# Loading data
+This just text
+```{r Loading Data}
+P1=read.xlsx("E. berryi data.xlsx",sheetIndex = "P1")
+P2=read.xlsx("E. berryi data.xlsx",sheetIndex = "P2")
+P3=read.xlsx("E. berryi data.xlsx",sheetIndex = "P3")
+P4=read.xlsx("E. berryi data.xlsx",sheetIndex = "P4")
+P5=read.xlsx("E. berryi data.xlsx",sheetIndex = "P5")
+```
+
+```{r}
+P1$Trial="P1"
+P2$Trial="P2"
+P3$Trial="P3"
+P4$Trial="P4"
+P5$Trial="P5"
+```
+
+```{r}
+squidtime=rbind(P1,P2,P3,P4,P5)
+```
+
