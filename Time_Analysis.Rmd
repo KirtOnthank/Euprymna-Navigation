@@ -185,7 +185,7 @@ abline(v = 600, lty = 3)   # optional: show censoring cutoff time
 ```
 
 ```{r}
-png("P1P2_Survival.png",width=9,height=5,units = "in",res = 300)
+png("P1P2_Survival.png",width=9,height=9,units = "in",res = 300)
 par(bg="white")
 plot(km_p1p2,
      fun = "event",        # plots 1 - S(t)
