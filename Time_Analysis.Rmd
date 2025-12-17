@@ -8,6 +8,9 @@ output: html_document
 # Loading Libraries
 ```{r Loading Libraries}
 library(xlsx)
+library(dplyr)
+library(coxme)
+library(survival)
 ```
 
 
@@ -31,5 +34,179 @@ P5$Trial="P5"
 
 ```{r}
 squidtime=rbind(P1,P2,P3,P4,P5)
+```
+
+# Learning Curve
+```{r}
+
+
+squidtime <- squidtime %>%
+  arrange(Tank, Squid, Trial, Code) %>%          # make sure they're in order
+  group_by(Tank, Squid, Trial) %>%               # each squid in each trial
+  mutate(Run = row_number()) %>%                 # 1, 2, 3, 4, 5
+  ungroup()
+
+```
+
+```{r}
+colnames(squidtime)
+P2.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])
+summary(aov(P2.lm))
+
+```
+
+```{r}
+plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])
+abline(P2.lm)
+```
+
+
+```{r}
+P1.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])
+summary(aov(P1.lm))
+plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])
+abline(P1.lm)
+```
+
+
+```{r}
+squidtime <- squidtime %>%
+  arrange(Tank, Squid, Code) %>%        # global time order per squid
+  group_by(Tank, Squid) %>%             # define an individual squid
+  mutate(GrandRun = row_number()) %>%   # 1, 2, 3, ..., 25
+  ungroup()
+
+```
+
+
+```{r}
+colnames(squidtime)
+grandrun.lm=lm(Time.Observed..sec.~GrandRun,data=squidtime)
+summary(aov(grandrun.lm))
+
+```
+
+```{r}
+plot(Time.Observed..sec.~GrandRun,data=squidtime)
+abline(grandrun.lm)
+
+```
+
+
+# Survival Analysis
+## P3 compared to P2
+Subsetting
+```{r}
+p2p3 <- squidtime %>%
+  filter(Trial %in% c("P2", "P3")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p2p3$Trial <- factor(p2p3$Trial)   # drops ordering
+p2p3$Trial <- relevel(p2p3$Trial, ref = "P2")
+```
+
+
+```{r}
+p2p3$event <- ifelse(p2p3$Escape..Y.N. == "yes", 1, 0)
+
+```
+
+
+
+```{r}
+m_p2p3 <- coxme(
+  Surv(Time.Observed..sec., event) ~ Trial + (1 | Tank/Squid),
+  data = p2p3
+)
+summary(m_p2p3)
+```
+
+## P2 compared to P1
+Subsetting
+```{r}
+p1p2 <- squidtime %>%
+  filter(Trial %in% c("P1", "P2")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p1p2$Trial <- factor(p1p2$Trial)   # drops ordering
+p1p2$Trial <- relevel(p1p2$Trial, ref = "P1")
+```
+
+
+```{r}
+p1p2$event <- ifelse(p1p2$Escape..Y.N. == "yes", 1, 0)
+
+```
+
+
+
+```{r}
+m_p1p2 <- coxme(
+  Surv(Time.Observed..sec., event) ~ Trial + (1 | Tank/Squid),
+  data = p1p2
+)
+summary(m_p1p2)
+```
+
+```{r}
+
+## assuming you already created p1p2 and p1p2$event
+## (keeping your existing code style)
+
+# Kaplan–Meier curves by Trial (descriptive)
+km_p1p2 <- survfit(Surv(Time.Observed..sec., event) ~ Trial, data = p1p2)
+
+# Plot in base R
+plot(km_p1p2,
+     xlab = "Time observed (s)",
+     ylab = "Proportion not escaped (survival)",
+     xlim = c(0, 600),
+     mark.time = TRUE,     # marks censoring times
+     lwd = 2,
+     lty = c(1, 2),
+     col = c(1, 1))        # both black; distinguish via lty
+
+legend("topright",
+       legend = levels(p1p2$Trial),
+       lty = c(1, 2),
+       lwd = 2,
+       bty = "n")
+
+abline(v = 600, lty = 3)   # optional: show censoring cutoff time
+
+```
+
+```{r}
+png("P1P2_Survival.png",width=9,height=5,units = "in",res = 300)
+par(bg="white")
+plot(km_p1p2,
+     fun = "event",        # plots 1 - S(t)
+     xlab = "Time observed (s)",
+     ylab = "Proportion escaped",
+     xlim = c(0, 600),
+     mark.time = TRUE,
+     lwd = 2,
+     lty = c(1, 2),
+     col = c("#6cc0a8", "#5A4B62"),
+     axes=F)
+
+legend("topleft",
+       legend = levels(p1p2$Trial),
+       lty = c(1, 2),
+       lwd = 2,
+       col = c("#6cc0a8", "#5A4B62"),
+       bty = "n")
+
+abline(v = 600, lty = 3)
+axis(1)
+axis(2)
 ```
 
