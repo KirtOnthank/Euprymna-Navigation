@@ -150,7 +150,7 @@ p1p2$event <- ifelse(p1p2$Escape..Y.N. == "yes", 1, 0)
 
 ```{r}
 m_p1p2 <- coxme(
-  Surv(Time.Observed..sec., event) ~ Trial + (1 | Tank/Squid),
+  Surv(Time.Observed..sec., event) ~ Trial + Run + (1 | Tank/Squid),
   data = p1p2
 )
 summary(m_p1p2)
@@ -185,12 +185,16 @@ abline(v = 600, lty = 3)   # optional: show censoring cutoff time
 ```
 
 ```{r}
+p1p2$Trial <- factor(p1p2$Trial, levels = c("P1", "P2"))
+# Kaplan–Meier curves by Trial (descriptive)
+km_p1p2 <- survfit(Surv(Time.Observed..sec., event) ~ Trial, data = p1p2)
+
 png("P1P2_Survival.png",width=9,height=9,units = "in",res = 300)
 par(bg="white")
 plot(km_p1p2,
-     fun = "event",        # plots 1 - S(t)
+     fun = "event",conf.int=TRUE,      # plots 1 - S(t)
      xlab = "Time observed (s)",
-     ylab = "Proportion escaped",
+     ylab = "Cumulative Proportion escaped",
      xlim = c(0, 600),
      mark.time = TRUE,
      lwd = 2,
@@ -208,5 +212,449 @@ legend("topleft",
 abline(v = 600, lty = 3)
 axis(1)
 axis(2)
+dev.off()
+```
+
+
+```{r}
+library(survival)
+
+p1p2$Trial <- factor(p1p2$Trial, levels = c("P1", "P2"))
+km_p1p2 <- survfit(Surv(Time.Observed..sec., event) ~ Trial, data = p1p2)
+
+# helper: convert (t, y) into step coordinates (for type="s" shapes)
+step_xy <- function(t, y, x0 = 0, y0 = 0) {
+  t <- c(x0, t)
+  y <- c(y0, y)
+  xs <- rep(t, each = 2)[-1]
+  ys <- rep(y, each = 2)
+  ys <- ys[-length(ys)]
+  list(x = xs, y = ys)
+}
+
+png("P1P2_Survival_CI.png", width = 9, height = 5, units = "in", res = 300)
+par(bg = "white")
+
+plot(0, 0, type = "n",
+     xlim = c(0, 600),
+     ylim = c(0, 0.6),
+     xlab = "Time observed (s)",
+     ylab = "Cumulative proportion escaped",
+     axes = FALSE)
+axis(1)
+axis(2, las = 1)
+box()
+abline(v = 600, lty = 3)
+
+line_cols <- c("#6cc0a8", "#5A4B62")
+fill_cols <- c(adjustcolor("#6cc0a8", alpha.f = 0.25),
+               adjustcolor("#5A4B62", alpha.f = 0.25))
+
+ncurves <- length(km_p1p2$strata)
+idx <- 1
+
+for (i in seq_len(ncurves)) {
+
+  n_i <- km_p1p2$strata[i]
+  t <- km_p1p2$time[idx:(idx + n_i - 1)]
+
+  surv  <- km_p1p2$surv[idx:(idx + n_i - 1)]
+  lower <- km_p1p2$lower[idx:(idx + n_i - 1)]
+  upper <- km_p1p2$upper[idx:(idx + n_i - 1)]
+
+  # extend to 600 so the last segment is flat to the censoring limit
+  if (max(t) < 600) {
+    t <- c(t, 600)
+    surv  <- c(surv,  tail(surv,  1))
+    lower <- c(lower, tail(lower, 1))
+    upper <- c(upper, tail(upper, 1))
+  }
+
+  # convert to event scale: F(t) = 1 - S(t)
+  event <- 1 - surv
+  event_lower <- 1 - upper   # note: swap for correct CI on event scale
+  event_upper <- 1 - lower
+
+  # step coords for CI band
+  lo <- step_xy(t, event_lower)
+  up <- step_xy(t, event_upper)
+
+  polygon(c(lo$x, rev(up$x)),
+          c(lo$y, rev(up$y)),
+          col = fill_cols[i],
+          border = NA)
+
+  # step coords for estimate line
+  est <- step_xy(t, event)
+  lines(est$x, est$y, lwd = 2, lty = i, col = line_cols[i])
+
+  idx <- idx + n_i
+}
+
+legend("topleft",
+       legend = c("P1: Red light", "P2: White light"),
+       lty = 1:2,
+       lwd = 2,
+       col = line_cols,
+       bty = "n")
+
+dev.off()
+
+```
+
+
+# P2P4 survival
+Subsetting
+```{r}
+p2p4 <- squidtime %>%
+  filter(Trial %in% c("P2", "P4")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p2p4$Trial <- factor(p2p4$Trial)   # drops ordering
+p2p4$Trial <- relevel(p2p4$Trial, ref = "P2")
+```
+
+
+```{r}
+p2p4$event <- ifelse(p2p4$Escape..Y.N. == "yes", 1, 0)
+
+```
+
+
+
+```{r}
+m_p2p4 <- coxme(
+  Surv(Time.Observed..sec., event) ~ Trial + (1 | Tank/Squid),
+  data = p2p4
+)
+summary(m_p2p4)
+```
+# P2P5
+Subsetting
+```{r}
+p2p5 <- squidtime %>%
+  filter(Trial %in% c("P2", "P5")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p2p5$Trial <- factor(p2p5$Trial)   # drops ordering
+p2p5$Trial <- relevel(p2p5$Trial, ref = "P2")
+```
+
+
+```{r}
+p2p5$event <- ifelse(p2p5$Escape..Y.N. == "yes", 1, 0)
+
+```
+
+
+
+```{r}
+m_p2p5 <- coxme(
+  Surv(Time.Observed..sec., event) ~ Trial + (1 | Tank/Squid),
+  data = p2p5
+)
+summary(m_p2p5)
+```
+
+# LInear models for each 
+```{r}
+colnames(squidtime)
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P4",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P5",])))
+
+```
+
+```{r}
+P3.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
+plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
+abline(P3.lm)
+```
+
+```{r}
+head(squidtime)
+```
+
+```{r}
+grand.m <- coxme(
+  Surv(Time.Observed..sec., Escape..Y.N. == "yes") ~
+    Trial * Run +
+    (1 | Tank/Squid),
+  data = squidtime[squidtime$Trial!="P1",]
+)
+summary(grand.m)
+```
+
+# Does grand run improve fit?
+```{r}
+m0 <- coxme(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ (1 | Tank/Squid),
+            data = squidtime)
+
+m1 <- coxme(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ GrandRun + (1 | Tank/Squid),
+            data = squidtime)
+
+anova(m0, m1)   # tests whether adding GrandRun improves fit
+
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+
+fit_within_trial <- function(trial_name) {
+  dat <- subset(squidtime, Trial == trial_name)
+  coxme(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ Run + (1 | Tank/Squid),
+        data = dat)
+}
+
+mP2 <- fit_within_trial("P2")
+mP3 <- fit_within_trial("P3")
+mP4 <- fit_within_trial("P4")
+mP5 <- fit_within_trial("P5")
+
+summary(mP2); summary(mP3); summary(mP4); summary(mP5)
+
+```
+# Making figure of relative hazard by run
+
+```{r}
+library(coxme)
+library(survival)
+
+# --- settings ---
+trials_to_plot <- c("P1","P2","P3","P4","P5")
+runs <- 1:5
+ref_run <- 1
+titles=c("P1: Red Light Baseline",
+         "P2: White Light Baseline",
+         "P3: Opposite Start Location", #Path Integration
+         "P4: Rearrange Landmarks", #Piloting
+         "P5: Remove Beacon") #Beaconing
+
+shade_col <- adjustcolor("#6cc0a8", alpha.f = 0.25)
+line_col  <- "#6cc0a8"
+
+# Ensure ordering
+squidtime$Trial <- factor(squidtime$Trial, levels = trials_to_plot)
+
+# Helper: fit within-trial model and return log-relative hazard vs Run=1 (+ CI)
+get_logrelhaz_by_run <- function(dat_trial, runs = 1:5, ref_run = 1) {
+
+  m <- coxme(Surv(Time.Observed..sec., Escape..Y.N. == "yes") ~ Run + (1 | Tank/Squid),
+             data = dat_trial)
+
+  b <- as.numeric(fixef(m)["Run"])
+  V <- as.matrix(vcov(m))    # 1x1 (fixed effect Run only)
+
+  d_run <- runs - ref_run
+
+  lp <- b * d_run                         # log relative hazard
+  se_lp <- sqrt(V[1,1]) * abs(d_run)      # SE scales with |Run-ref|
+
+out <- data.frame(
+  Run = runs,
+  lp = lp / log(2),
+  lo = (lp - 1.96 * se_lp) / log(2),
+  hi = (lp + 1.96 * se_lp) / log(2)
+)
+
+  list(model = m, pred = out)
+}
+
+# --- compute predictions for each trial ---
+pred_list <- setNames(vector("list", length(trials_to_plot)), trials_to_plot)
+for (tr in trials_to_plot) {
+  dat_tr <- subset(squidtime, Trial == tr)
+  pred_list[[tr]] <- get_logrelhaz_by_run(dat_tr, runs = runs, ref_run = ref_run)
+}
+
+# --- common y-limits across panels (recommended) ---
+all_lo <- unlist(lapply(pred_list, function(z) z$pred$lo))
+all_hi <- unlist(lapply(pred_list, function(z) z$pred$hi))
+yl <- range(c(all_lo, all_hi), finite = TRUE)
+
+# --- 5-panel layout ---
+png("LogRelHaz_byRun_5panels.png", width = 12, height = 8, units = "in", res = 300)
+par(mfrow = c(2,3), mar = c(4,4,3,1), oma = c(0,0,2,0), bg="white", mgp=c(1.7,0.7,0))
+iter=1
+for (tr in trials_to_plot) {
+  d <- pred_list[[tr]]$pred
+
+  plot(d$Run, d$lp, type = "n",
+       xlim = c(1,5), ylim = yl,
+       xlab = "Run",
+       ylab = expression(Log[2] * " Relative Escape Hazard (vs Run 1)"),
+       cex.lab=1.3,
+       main = titles[iter],
+       axes = FALSE)
+
+  axis(1, at = 1:5)
+  axis(2, las = 1)
+  box()
+  text(1,2.1,"More Likely to Escape →", srt=90,cex=0.7)
+  text(1,-2.1,"← Less Likely to Escape", srt=90, cex=0.7)
+  # Reference line at 0 (same hazard as Run 1)
+  abline(h = 0, lty = 3)
+
+  # Shaded CI band
+  polygon(c(d$Run, rev(d$Run)),
+          c(d$lo,  rev(d$hi)),
+          col = shade_col, border = NA)
+
+  # Estimate line + points
+  lines(d$Run, d$lp, lwd = 2, col = line_col)
+  points(d$Run, d$lp, pch = 16, cex = 0.9, col = line_col)
+  iter=iter+1
+}
+
+# blank 6th panel
+plot.new()
+
+#mtext("Within-trial change in escape hazard across runs (each panel relative to Run 1)",
+#      outer = TRUE, cex = 1.1)
+
+dev.off()
+
+
+```
+
+# making survival curves for P3-P5 versus P2
+```{r}
+library(survival)
+
+# Helper: convert (t, y) into step coordinates (horizontal then vertical)
+step_xy <- function(t, y, x0 = 0, y0 = 0) {
+  t <- c(x0, t)
+  y <- c(y0, y)
+  xs <- rep(t, each = 2)[-1]
+  ys <- rep(y, each = 2)
+  ys <- ys[-length(ys)]
+  list(x = xs, y = ys)
+}
+
+# Plot one panel: KM curves (proportion escaped) for a pair of trials, with shaded CI
+plot_pair_km <- function(dat, trial_levels, main_title,
+                         tmax = 600,
+                         line_cols = c("#6cc0a8", "#5A4B62"),
+                         ltys = c(1, 2),
+                         alpha = 0.20) {
+
+  dat$Trial <- factor(dat$Trial, levels = trial_levels)
+
+  fit <- survfit(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ Trial, data = dat)
+
+  fill_cols <- adjustcolor(line_cols, alpha.f = alpha)
+
+  # Empty canvas
+  plot(0, 0, type = "n",
+       xlim = c(0, tmax),
+       ylim = c(0, 1),
+       xlab = "Time observed (s)",
+       ylab = "Cumulative proportion escaped",
+       cex.lab=1.3,
+       axes = FALSE)
+  axis(1)
+  axis(2, las = 1)
+  box()
+  abline(v = tmax, lty = 3)
+
+  # Draw each stratum (2 curves)
+  ncurves <- length(fit$strata)
+  idx <- 1
+
+  for (i in seq_len(ncurves)) {
+    n_i <- fit$strata[i]
+
+    t <- fit$time[idx:(idx + n_i - 1)]
+    surv  <- fit$surv[idx:(idx + n_i - 1)]
+    lower <- fit$lower[idx:(idx + n_i - 1)]
+    upper <- fit$upper[idx:(idx + n_i - 1)]
+
+    # Advance idx now so we don't forget on early 'next'
+    idx <- idx + n_i
+
+    if (length(t) == 0) next
+
+    # ---- FIX: truncate everything to tmax for clean polygons ----
+    keep <- t <= tmax
+    t     <- t[keep]
+    surv  <- surv[keep]
+    lower <- lower[keep]
+    upper <- upper[keep]
+
+    if (length(t) == 0) next
+
+    # Ensure curve ends exactly at tmax (flat extension)
+    if (max(t) < tmax) {
+      t <- c(t, tmax)
+      surv  <- c(surv,  tail(surv,  1))
+      lower <- c(lower, tail(lower, 1))
+      upper <- c(upper, tail(upper, 1))
+    }
+
+    # event scale: proportion escaped = 1 - S(t)
+    event    <- 1 - surv
+    event_lo <- 1 - upper   # swapped for correct CI on event scale
+    event_hi <- 1 - lower
+
+    # Step coords for CI band
+    lo <- step_xy(t, event_lo)
+    hi <- step_xy(t, event_hi)
+
+    polygon(c(lo$x, rev(hi$x)),
+            c(lo$y, rev(hi$y)),
+            col = fill_cols[i], border = NA)
+
+    # Step coords for estimate
+    est <- step_xy(t, event)
+    lines(est$x, est$y, lwd = 2, lty = ltys[i], col = line_cols[i])
+  }
+
+
+}
+
+# ---- Build the 3-panel figure: P2 vs P3, P2 vs P4, P2 vs P5 ----
+png("P2_vs_P3P4P5_3panel.png", width = 12, height = 4, units = "in", res = 300)
+par(bg="white", mfrow = c(1,3), mar = c(4,4,3,1), mgp = c(2,0.7,0))
+
+# P2 vs P3
+dat23 <- subset(squidtime, Trial %in% c("P2","P3"))
+plot_pair_km(dat23, trial_levels = c("P2","P3"), main_title = "P2 vs P3", tmax = 600)
+  legend("topleft",
+         legend = c("P2: White Light Baseline","P3: Opposite Start Location"),
+         lty = ltys, lwd = 2, col = line_cols,
+         bty = "n", cex = 0.9)
+  
+# P2 vs P4 (handles times > 600 cleanly via truncation)
+dat24 <- subset(squidtime, Trial %in% c("P2","P4"))
+plot_pair_km(dat24, trial_levels = c("P2","P4"), main_title = "P2 vs P4", tmax = 600)
+  legend("topleft",
+         legend = c("P2: White Light Baseline","P4: Rearrange Landmarks"),
+         lty = ltys, lwd = 2, col = line_cols,
+         bty = "n", cex = 0.9)
+  
+# P2 vs P5
+dat25 <- subset(squidtime, Trial %in% c("P2","P5"))
+plot_pair_km(dat25, trial_levels = c("P2","P5"), main_title = "P2 vs P5", tmax = 600)
+  legend("topleft",
+         legend = c("P2: White Light Baseline","P5: Remove Beacon"),
+         lty = ltys, lwd = 2, col = line_cols,
+         bty = "n", cex = 0.9)
+  
+dev.off()
+
+
 ```
 
