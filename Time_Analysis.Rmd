@@ -11,6 +11,9 @@ library(xlsx)
 library(dplyr)
 library(coxme)
 library(survival)
+library(readODS)
+library(lme4)
+library(lmerTest)
 ```
 
 
@@ -36,11 +39,35 @@ P5$Trial="P5"
 squidtime=rbind(P1,P2,P3,P4,P5)
 ```
 
+```{r}
+squiddist=readODS::read_ods("RAS_FrameSS.ods",sheet=1)
+```
+
+## pulling over trial details from squidtime object into squiddist
+```{r}
+squidtime=squidtime[order(squidtime$Code),]
+squiddist=squiddist[order(squiddist$`File #`),]
+squiddist=cbind(squiddist,squidtime[,c(2,3,6)])
+
+colnames(squiddist)[c(2,6,8)]=c("Code","path_length_cm","Escape..Y.N.")
+
+colnames(squidtime)
+colnames(squiddist)
+```
+
+
 # Learning Curve
 ```{r}
 
 
 squidtime <- squidtime %>%
+  arrange(Tank, Squid, Trial, Code) %>%          # make sure they're in order
+  group_by(Tank, Squid, Trial) %>%               # each squid in each trial
+  mutate(Run = row_number()) %>%                 # 1, 2, 3, 4, 5
+  ungroup()
+
+
+squiddist <- squiddist %>%
   arrange(Tank, Squid, Trial, Code) %>%          # make sure they're in order
   group_by(Tank, Squid, Trial) %>%               # each squid in each trial
   mutate(Run = row_number()) %>%                 # 1, 2, 3, 4, 5
@@ -56,9 +83,40 @@ summary(aov(P2.lm))
 ```
 
 ```{r}
+colnames(squiddist)
+P2dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
+summary(aov(P2dist.lm))
+
+```
+
+
+
+```{r}
 plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])
 abline(P2.lm)
 ```
+
+```{r}
+plot(path_length_cm~Run,data=squiddist[squidtime$Trial=="P2",])
+abline(P2dist.lm)
+```
+
+## Do they escape at a greater rate through P2
+```{r}
+squiddist$escape=0
+squiddist$escape[squiddist$Escape..Y.N.=="Y"]=1
+
+P2esc.lm=lm(escape~Run,data=squiddist[squiddist$Trial=="P2",])
+summary(aov(P2esc.lm))
+
+```
+
+```{r}
+plot(escape~Run,data=squiddist[squidtime$Trial=="P2",])
+abline(P2esc.lm)
+
+```
+
 
 
 ```{r}
@@ -67,6 +125,14 @@ summary(aov(P1.lm))
 plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])
 abline(P1.lm)
 ```
+
+```{r}
+P1dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P1",])
+summary(aov(P1dist.lm))
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P1",])
+abline(P1dist.lm)
+```
+
 
 
 ```{r}
@@ -94,7 +160,7 @@ abline(grandrun.lm)
 
 
 # Survival Analysis
-## P3 compared to P2
+## P3 compared to P2 time
 Subsetting
 ```{r}
 p2p3 <- squidtime %>%
@@ -123,6 +189,37 @@ m_p2p3 <- coxme(
   data = p2p3
 )
 summary(m_p2p3)
+```
+
+## P3 compared to P2 distance
+Subsetting
+```{r}
+p2p3dist <- squiddist %>%
+  filter(Trial %in% c("P2", "P3")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p2p3dist$Trial <- factor(p2p3dist$Trial)   # drops ordering
+p2p3dist$Trial <- relevel(p2p3dist$Trial, ref = "P2")
+```
+
+
+```{r}
+p2p3dist$event <- ifelse(p2p3dist$Escape..Y.N. == "Y", 1, 0)
+
+```
+
+
+
+```{r}
+m_p2p3dist <- coxme(
+  Surv(path_length_cm, event) ~ Trial + (1 | Tank/Squid),
+  data = p2p3dist
+)
+summary(m_p2p3dist)
 ```
 
 ## P2 compared to P1
@@ -232,7 +329,7 @@ step_xy <- function(t, y, x0 = 0, y0 = 0) {
   list(x = xs, y = ys)
 }
 
-png("P1P2_Survival_CI.png", width = 9, height = 5, units = "in", res = 300)
+png("P1P2_Survival_CI.png", width = 12, height = 8, units = "in", res = 300)
 par(bg = "white")
 
 plot(0, 0, type = "n",
@@ -302,6 +399,144 @@ dev.off()
 
 ```
 
+## P2 compared to P1 distance
+Subsetting
+```{r}
+p1p2dist <- squiddist %>%
+  filter(Trial %in% c("P1", "P2")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p1p2dist$Trial <- factor(p1p2dist$Trial)   # drops ordering
+p1p2dist$Trial <- relevel(p1p2dist$Trial, ref = "P1")
+```
+
+
+```{r}
+p1p2dist$event <- ifelse(p1p2dist$Escape..Y.N. == "Y", 1, 0)
+
+```
+
+
+
+```{r}
+m_p1p2dist <- coxme(
+  Surv(path_length_cm, event) ~ Trial + Run + (1 | Tank/Squid),
+  data = p1p2dist
+)
+summary(m_p1p2dist)
+```
+
+```{r}
+
+## assuming you already created p1p2 and p1p2$event
+## (keeping your existing code style)
+
+# Kaplan–Meier curves by Trial (descriptive)
+km_p1p2dist <- survfit(Surv(path_length_cm, event) ~ Trial, data = p1p2dist)
+
+# Plot in base R
+plot(km_p1p2dist,
+     xlab = "Time observed (s)",
+     ylab = "Proportion not escaped (survival)",
+     xlim = c(0, round(max(p1p2dist$path_length_cm),digits=-2)),
+     mark.time = TRUE,     # marks censoring times
+     lwd = 2,
+     lty = c(1, 2),
+     col = c(1, 1))        # both black; distinguish via lty
+
+legend("topright",
+       legend = levels(p1p2dist$Trial),
+       lty = c(1, 2),
+       lwd = 2,
+       bty = "n")
+
+
+```
+
+
+
+
+```{r}
+library(survival)
+
+p1p2dist$Trial <- factor(p1p2dist$Trial, levels = c("P1", "P2"))
+km_p1p2dist <- survfit(Surv(path_length_cm, event) ~ Trial, data = p1p2dist)
+
+# helper: convert (t, y) into step coordinates (for type="s" shapes)
+step_xy <- function(t, y, x0 = 0, y0 = 0) {
+  t <- c(x0, t)
+  y <- c(y0, y)
+  xs <- rep(t, each = 2)[-1]
+  ys <- rep(y, each = 2)
+  ys <- ys[-length(ys)]
+  list(x = xs, y = ys)
+}
+
+png("P1P2dist_Survival_CI.png", width = 12, height = 8, units = "in", res = 300)
+par(bg = "white")
+
+plot(0, 0, type = "n",
+     xlim = c(0, round(max(p1p2dist$path_length_cm),digits=-2)),
+     ylim = c(0, 1),
+     xlab = "Time observed (s)",
+     ylab = "Cumulative proportion escaped",
+     axes = FALSE)
+axis(1)
+axis(2, las = 1)
+box()
+
+line_cols <- c("#6cc0a8", "#5A4B62")
+fill_cols <- c(adjustcolor("#6cc0a8", alpha.f = 0.25),
+               adjustcolor("#5A4B62", alpha.f = 0.25))
+
+ncurves <- length(km_p1p2dist$strata)
+idx <- 1
+
+for (i in seq_len(ncurves)) {
+
+  n_i <- km_p1p2dist$strata[i]
+  t <- km_p1p2dist$time[idx:(idx + n_i - 1)]
+
+  surv  <- km_p1p2dist$surv[idx:(idx + n_i - 1)]
+  lower <- km_p1p2dist$lower[idx:(idx + n_i - 1)]
+  upper <- km_p1p2dist$upper[idx:(idx + n_i - 1)]
+
+  # convert to event scale: F(t) = 1 - S(t)
+  event <- 1 - surv
+  event_lower <- 1 - upper   # note: swap for correct CI on event scale
+  event_upper <- 1 - lower
+
+  # step coords for CI band
+  lo <- step_xy(t, event_lower)
+  up <- step_xy(t, event_upper)
+
+  polygon(c(lo$x, rev(up$x)),
+          c(lo$y, rev(up$y)),
+          col = fill_cols[i],
+          border = NA)
+
+  # step coords for estimate line
+  est <- step_xy(t, event)
+  lines(est$x, est$y, lwd = 2, lty = i, col = line_cols[i])
+
+  idx <- idx + n_i
+}
+
+legend("topleft",
+       legend = c("P1: Red light", "P2: White light"),
+       lty = 1:2,
+       lwd = 2,
+       col = line_cols,
+       bty = "n")
+
+dev.off()
+
+```
+
 
 # P2P4 survival
 Subsetting
@@ -333,7 +568,40 @@ m_p2p4 <- coxme(
 )
 summary(m_p2p4)
 ```
-# P2P5
+
+# P2P4 survival distance
+Subsetting
+```{r}
+p2p4dist <- squiddist %>%
+  filter(Trial %in% c("P2", "P4")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p2p4dist$Trial <- factor(p2p4dist$Trial)   # drops ordering
+p2p4dist$Trial <- relevel(p2p4dist$Trial, ref = "P2")
+```
+
+
+```{r}
+p2p4dist$event <- ifelse(p2p4dist$Escape..Y.N. == "Y", 1, 0)
+
+```
+
+
+
+```{r}
+m_p2p4dist <- coxme(
+  Surv(path_length_cm, event) ~ Trial + (1 | Tank/Squid),
+  data = p2p4dist
+)
+summary(m_p2p4dist)
+```
+
+
+# P2P5 Time
 Subsetting
 ```{r}
 p2p5 <- squidtime %>%
@@ -364,7 +632,39 @@ m_p2p5 <- coxme(
 summary(m_p2p5)
 ```
 
+# P2P5 Distance
+Subsetting
+```{r}
+p2p5dist <- squiddist %>%
+  filter(Trial %in% c("P2", "P5")) %>%
+  droplevels()
+```
+
+
+
+```{r}
+p2p5dist$Trial <- factor(p2p5dist$Trial)   # drops ordering
+p2p5dist$Trial <- relevel(p2p5dist$Trial, ref = "P2")
+```
+
+
+```{r}
+p2p5dist$event <- ifelse(p2p5dist$Escape..Y.N. == "Y", 1, 0)
+
+```
+
+
+
+```{r}
+m_p2p5dist <- coxme(
+  Surv(path_length_cm, event) ~ Trial + (1 | Tank/Squid),
+  data = p2p5dist
+)
+summary(m_p2p5dist)
+```
+
 # LInear models for each 
+## Time
 ```{r}
 colnames(squidtime)
 summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])))
@@ -380,6 +680,30 @@ P3.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
 plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
 abline(P3.lm)
 ```
+
+## Dist
+```{r}
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P1",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P3",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])))
+
+```
+
+```{r}
+P4dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])
+abline(P4dist.lm)
+```
+
+
+```{r}
+P5dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])
+abline(P5dist.lm)
+```
+
 
 ```{r}
 head(squidtime)
@@ -626,7 +950,7 @@ plot_pair_km <- function(dat, trial_levels, main_title,
 }
 
 # ---- Build the 3-panel figure: P2 vs P3, P2 vs P4, P2 vs P5 ----
-png("P2_vs_P3P4P5_3panel.png", width = 12, height = 4, units = "in", res = 300)
+png("P2_vs_P3P4P5_3panel.png", width = 12, height = 8, units = "in", res = 300)
 par(bg="white", mfrow = c(1,3), mar = c(4,4,3,1), mgp = c(2,0.7,0))
 
 # P2 vs P3
@@ -656,5 +980,5 @@ plot_pair_km(dat25, trial_levels = c("P2","P5"), main_title = "P2 vs P5", tmax =
 dev.off()
 
 
-```
 
+```
