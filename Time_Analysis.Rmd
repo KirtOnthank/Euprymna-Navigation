@@ -6,6 +6,17 @@ output: html_document
 ---
 
 # Loading Libraries
+
+This section loads the R packages needed for the entire analysis:
+
+- **xlsx**: Reads the Excel data file containing time-to-escape measurements for each trial (P1–P5).
+- **dplyr**: Provides data manipulation functions (`arrange`, `group_by`, `mutate`, `filter`, etc.).
+- **coxme**: Fits mixed-effects Cox proportional hazards models — the primary survival analysis tool. This allows us to include random effects (e.g., individual squid nested within tank) to account for repeated measures on the same animals.
+- **survival**: Provides the `Surv()` function for creating survival objects and `survfit()` for Kaplan–Meier curves.
+- **readODS**: Reads the OpenDocument Spreadsheet (`.ods`) file containing distance/path-length measurements.
+- **lme4**: Fits generalized linear mixed models (GLMMs), used later for analyzing escape probability (binary outcome).
+- **lmerTest**: Provides p-values for linear mixed models (though not heavily used in this script).
+
 ```{r Loading Libraries}
 library(xlsx)
 library(dplyr)
@@ -18,7 +29,9 @@ library(lmerTest)
 
 
 # Loading data
-This just text
+
+Data are loaded from the Excel file `E. berryi data.xlsx`, which contains separate sheets for each experimental procedure (P1 through P5). Each sheet holds trial-by-trial observations for individual squids: the time (in seconds) taken to locate and swim through the escape hole in the open-field tank.
+
 ```{r Loading Data}
 P1=read.xlsx("E. berryi data.xlsx",sheetIndex = "P1")
 P2=read.xlsx("E. berryi data.xlsx",sheetIndex = "P2")
@@ -26,6 +39,8 @@ P3=read.xlsx("E. berryi data.xlsx",sheetIndex = "P3")
 P4=read.xlsx("E. berryi data.xlsx",sheetIndex = "P4")
 P5=read.xlsx("E. berryi data.xlsx",sheetIndex = "P5")
 ```
+
+After loading, a `Trial` column is added to each data frame to identify which procedure the data came from. Then all five procedure datasets are combined by row into a single master data frame called `squidtime`. This combined object contains every time-to-escape observation for all squids across all procedures.
 
 ```{r}
 P1$Trial="P1"
@@ -39,11 +54,16 @@ P5$Trial="P5"
 squidtime=rbind(P1,P2,P3,P4,P5)
 ```
 
+A second data source — `RAS_FrameSS.ods` — contains the **path distance** (in cm) that each squid swam before reaching the escape hole. These distances were measured by tracking the squid's path from GoPro footage using ImageJ. While `squidtime` tracks *how long* it took to escape, `squiddist` tracks *how far* they swam.
+
 ```{r}
 squiddist=readODS::read_ods("RAS_FrameSS.ods",sheet=1)
 ```
 
-## pulling over trial details from squidtime object into squiddist
+## Merging time and distance data
+
+The distance spreadsheet (`squiddist`) records path length and escape outcome per trial (identified by file number), but does not carry over the trial-level metadata (Tank, Squid, Trial procedure label) from the time dataset. This block merges the two by sorting both by their subject/trial identifiers and binding the relevant columns. It also renames columns in `squiddist` to match the naming conventions used in `squidtime`.
+
 ```{r}
 squidtime=squidtime[order(squidtime$Code),]
 squiddist=squiddist[order(squiddist$`File #`),]
@@ -57,6 +77,11 @@ colnames(squiddist)
 
 
 # Learning Curve
+
+## Assigning run numbers
+
+Within each procedure (trial type), every squid completed 5 repeated runs. This block adds a `Run` column (1–5) to both `squidtime` and `squiddist`, numbering the sequential attempts within each combination of `Tank`, `Squid`, and `Trial`. This allows us later to test whether escape performance improves with practice — i.e., do squids get faster (or more direct) across Runs 1 through 5?
+
 ```{r}
 
 
@@ -75,12 +100,20 @@ squiddist <- squiddist %>%
 
 ```
 
+## P2 learning curve: time
+
+A simple linear regression of escape time on Run number for the **P2 (White Light Baseline)** procedure. The ANOVA summary tells us whether there is a significant linear change in escape time over the 5 runs. A negative slope would indicate that squids learned to escape faster with practice. Note that the x-axis label "Run" is mislabeled — squiddist data is used but `squidtime` is referenced.
+
 ```{r}
 colnames(squidtime)
 P2.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])
 summary(aov(P2.lm))
 
 ```
+
+## P2 learning curve: distance
+
+Same approach, but now testing whether the **path length** (distance swum) changed across runs within P2. Again, a significant ANOVA with a negative slope would suggest the squids learned a more direct route.
 
 ```{r}
 colnames(squiddist)
@@ -91,17 +124,24 @@ summary(aov(P2dist.lm))
 
 
 
+Visual inspection: scatterplot of escape time vs. run number for P2, with the linear regression line overlaid.
+
 ```{r}
 plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])
 abline(P2.lm)
 ```
+
+Visual inspection: scatterplot of path distance vs. run number for P2, with the regression line. Note that the data argument incorrectly references `squiddist` but the subset filter uses `squidtime` — this appears to be a bug (it will use row indices from `squidtime` to index `squiddist`, which will work accidentally only if the objects have the same row order and dimensions).
 
 ```{r}
 plot(path_length_cm~Run,data=squiddist[squidtime$Trial=="P2",])
 abline(P2dist.lm)
 ```
 
-## Do they escape at a greater rate through P2
+## Do they escape at a greater rate through P2?
+
+Beyond *how fast* or *how far* they swim, we can ask whether the **probability of escaping at all** increased across runs within P2. This block creates a binary `escape` variable (1 = escaped) and fits a linear model of escape probability vs. Run. Since the outcome is binary, a linear model is not strictly appropriate (logistic regression would be better), but it provides a rough first look at trend.
+
 ```{r}
 squiddist$escape=0
 squiddist$escape[squiddist$Escape..Y.N.=="Y"]=1
@@ -111,6 +151,8 @@ summary(aov(P2esc.lm))
 
 ```
 
+Scatterplot of escape probability vs. run for P2, with the linear fit line. Same data-indexing issue as above (using `squidtime` filter on `squiddist` data).
+
 ```{r}
 plot(escape~Run,data=squiddist[squidtime$Trial=="P2",])
 abline(P2esc.lm)
@@ -119,12 +161,18 @@ abline(P2esc.lm)
 
 
 
+## P1 (Red Light Baseline) learning curves
+
+The same learning-curve analysis applied to **P1 (Red Light Baseline)**. Since P1 represents the squids' very first exposure to the novel open-field tank, this tests whether there is an initial learning effect as they become familiar with the arena and locate the escape hole.
+
 ```{r}
 P1.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])
 summary(aov(P1.lm))
 plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])
 abline(P1.lm)
 ```
+
+Distance learning curve for P1: do squids also take more direct paths across successive runs in the novel environment?
 
 ```{r}
 P1dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P1",])
@@ -135,6 +183,10 @@ abline(P1dist.lm)
 
 
 
+## GrandRun: learning across all procedures
+
+While `Run` numbers trials *within* each procedure (1–5), `GrandRun` assigns a global trial number across all procedures for each squid (1, 2, 3, ..., 25). This allows us to check whether there is improvement across the entire experiment — i.e., do squids become generally better at the escape task over time, beyond within-procedure learning?
+
 ```{r}
 squidtime <- squidtime %>%
   arrange(Tank, Squid, Code) %>%        # global time order per squid
@@ -144,6 +196,7 @@ squidtime <- squidtime %>%
 
 ```
 
+Linear regression of escape time on `GrandRun` across all data points. A significant negative slope would indicate that escape efficiency improves cumulatively with experience across the entire experiment.
 
 ```{r}
 colnames(squidtime)
@@ -151,6 +204,8 @@ grandrun.lm=lm(Time.Observed..sec.~GrandRun,data=squidtime)
 summary(aov(grandrun.lm))
 
 ```
+
+Visual check: escape time vs. GrandRun with regression line.
 
 ```{r}
 plot(Time.Observed..sec.~GrandRun,data=squidtime)
@@ -160,8 +215,20 @@ abline(grandrun.lm)
 
 
 # Survival Analysis
-## P3 compared to P2 time
-Subsetting
+
+Survival analysis (Cox proportional hazards models) is the core analytical framework of this study. Unlike linear regression, which models the mean outcome, survival analysis models the **time until an event occurs** — here, the "event" is the squid escaping the tank. This approach has two key advantages:
+
+1. It naturally handles **censored data**: trials where the squid did not escape within the 10-minute cutoff. These observations are not discarded — they contribute information that the escape time is *at least* 10 minutes.
+2. The **Cox mixed-effects model** (`coxme`) can include random effects to account for the hierarchical structure of the data: multiple runs nested within individual squids, nested within tanks.
+
+The central question: when a spatial cue is altered or removed (P3–P5), do escape times (or distances) increase compared to the baseline procedure (P2)? A positive coefficient for the test procedure would indicate reduced escape efficiency, suggesting the squid relied on that cue.
+
+## P3 (Opposite Start Location) vs. P2 (White Light Baseline) — Time
+
+**P3 tests path integration**: the starting position is shifted 90° from P2's position. If the squid located the hole using internal self-motion cues (path integration), changing the start position should not affect performance — they would simply compute a new vector. If instead they relied on external cues aligned with the tank or room, performance might differ.
+
+Data are subset to P2 and P3 only, and `Trial` is releveled so P2 serves as the reference category.
+
 ```{r}
 p2p3 <- squidtime %>%
   filter(Trial %in% c("P2", "P3")) %>%
@@ -176,12 +243,16 @@ p2p3$Trial <- relevel(p2p3$Trial, ref = "P2")
 ```
 
 
+The escape event variable is created from the `Escape..Y.N.` column. Note that in `squidtime` (the Excel source), escape is coded as lowercase `"yes"` / `"no"`.
+
 ```{r}
 p2p3$event <- ifelse(p2p3$Escape..Y.N. == "yes", 1, 0)
 
 ```
 
 
+
+A mixed-effects Cox model with `Trial` (P2 vs. P3) as a fixed effect and a random intercept for `Tank/Squid` (squid nested within tank). The model tests whether the hazard of escape differs between P3 and P2. A hazard ratio < 1 (negative coefficient) means squids in P3 took longer to escape; a hazard ratio > 1 means they escaped faster.
 
 ```{r}
 m_p2p3 <- coxme(
@@ -191,8 +262,10 @@ m_p2p3 <- coxme(
 summary(m_p2p3)
 ```
 
-## P3 compared to P2 distance
-Subsetting
+## P3 vs. P2 — Distance
+
+Same comparison, but now using **path length (cm)** as the survival time variable. Instead of "time to escape," the outcome is "distance traveled to escape." This tests whether squids took a less direct route when the start position was moved, even if total time was not significantly affected.
+
 ```{r}
 p2p3dist <- squiddist %>%
   filter(Trial %in% c("P2", "P3")) %>%
@@ -206,6 +279,8 @@ p2p3dist$Trial <- factor(p2p3dist$Trial)   # drops ordering
 p2p3dist$Trial <- relevel(p2p3dist$Trial, ref = "P2")
 ```
 
+
+Note: in the distance data (`squiddist`), the escape column uses uppercase `"Y"` / `"N"`, unlike the lowercase `"yes"` / `"no"` in `squidtime`. This is a data-source inconsistency.
 
 ```{r}
 p2p3dist$event <- ifelse(p2p3dist$Escape..Y.N. == "Y", 1, 0)
@@ -222,8 +297,12 @@ m_p2p3dist <- coxme(
 summary(m_p2p3dist)
 ```
 
-## P2 compared to P1
-Subsetting
+## P1 (Red Light Baseline) vs. P2 (White Light Baseline) — Time
+
+This comparison was not part of the original proposal's plan. P1 and P2 are both baseline conditions — the only difference is the lighting (red vs. white light). Squids were first tested under red light (P1, which mimics their natural dim/nighttime environment), then under white light (P2). This analysis asks whether the lighting change itself affected escape performance.
+
+Note: this model includes `Run` as an additional fixed effect (alongside `Trial`), which is not done in the other between-procedure comparisons. This accounts for within-procedure learning when comparing P1 and P2.
+
 ```{r}
 p1p2 <- squidtime %>%
   filter(Trial %in% c("P1", "P2")) %>%
@@ -253,6 +332,10 @@ m_p1p2 <- coxme(
 summary(m_p1p2)
 ```
 
+### Kaplan–Meier plot: P1 vs. P2 — survival (proportion not escaped)
+
+Before fitting the Cox model, we can visualize the raw escape-time distributions using Kaplan–Meier curves. This plot shows the **proportion of squids that have NOT yet escaped** (survival) as a function of time. P1 and P2 are distinguished by line type (both black). The vertical dashed line at 600 s marks the 10-minute trial cutoff — squids that never escaped are censored here.
+
 ```{r}
 
 ## assuming you already created p1p2 and p1p2$event
@@ -280,6 +363,10 @@ legend("topright",
 abline(v = 600, lty = 3)   # optional: show censoring cutoff time
 
 ```
+
+### Publication figure: P1 vs. P2 — cumulative proportion escaped
+
+This block generates a polished figure saved as `P1P2_Survival.png`. Unlike the quick plot above, this uses `fun = "event"` to show the **cumulative proportion escaped** (i.e., 1 − survival) with confidence intervals. P1 is shown in green (`#6cc0a8`) and P2 in purple (`#5A4B62`).
 
 ```{r}
 p1p2$Trial <- factor(p1p2$Trial, levels = c("P1", "P2"))
@@ -312,6 +399,15 @@ axis(2)
 dev.off()
 ```
 
+
+### Custom CI figure: P1 vs. P2 — cumulative escaped with shaded confidence bands
+
+This block builds a fully custom KM figure from scratch (rather than using `plot.survfit`), because the default plot does not cleanly display confidence intervals on the event scale (cumulative proportion escaped). The `step_xy()` helper function converts survival step functions into coordinates suitable for drawing polygons and lines.
+
+The figure saved as `P1P2_Survival_CI.png` shows:
+- Cumulative escape curves (event = 1 − survival)
+- Shaded 95% confidence bands (semi-transparent green/purple)
+- The 600 s censoring cutoff as a vertical dashed line
 
 ```{r}
 library(survival)
@@ -399,8 +495,10 @@ dev.off()
 
 ```
 
-## P2 compared to P1 distance
-Subsetting
+## P1 vs. P2 — Distance
+
+The same P1-vs-P2 comparison, but using **path length** instead of time. Did squids take more or less direct routes under white light (P2) compared to red light (P1)?
+
 ```{r}
 p1p2dist <- squiddist %>%
   filter(Trial %in% c("P1", "P2")) %>%
@@ -429,6 +527,10 @@ m_p1p2dist <- coxme(
 )
 summary(m_p1p2dist)
 ```
+
+### Kaplan–Meier plot: P1 vs. P2 — distance survival
+
+Exploratory KM plot using path length as the time variable. Note the x-axis label mistakenly says "Time observed (s)" when it should read "Distance traveled (cm)" — the `plot.survfit` call uses the same x-axis label as the time-based plots rather than an appropriate label for distance.
 
 ```{r}
 
@@ -459,6 +561,10 @@ legend("topright",
 
 
 
+
+### Custom CI figure: P1 vs. P2 — distance
+
+Same approach as the time-based CI figure, but now using path length as the x-axis. The x-axis limit is rounded from the maximum observed distance. The x-axis label still says "Time observed (s)" rather than "Distance traveled (cm)" — a copy-paste issue from the time-based version.
 
 ```{r}
 library(survival)
@@ -538,8 +644,10 @@ dev.off()
 ```
 
 
-# P2P4 survival
-Subsetting
+# P2 vs. P4 (Rearrange Landmarks) — Time
+
+**P4 tests piloting navigation**: the internal tank objects (rocks, plants) are rearranged while the escape hole location remains the same. If squids use a cognitive map of the landmark layout, this rearrangement should impair performance (longer escape times). The model compares P4 to the P2 baseline.
+
 ```{r}
 p2p4 <- squidtime %>%
   filter(Trial %in% c("P2", "P4")) %>%
@@ -569,8 +677,10 @@ m_p2p4 <- coxme(
 summary(m_p2p4)
 ```
 
-# P2P4 survival distance
-Subsetting
+# P2 vs. P4 — Distance
+
+The same piloting test, but with path distance as the outcome.
+
 ```{r}
 p2p4dist <- squiddist %>%
   filter(Trial %in% c("P2", "P4")) %>%
@@ -601,8 +711,10 @@ summary(m_p2p4dist)
 ```
 
 
-# P2P5 Time
-Subsetting
+# P2 vs. P5 (Remove Beacon) — Time
+
+**P5 tests beaconing navigation**: the floating marker (ping pong ball) positioned over the escape hole is removed. If squids were using this marker as a beacon to locate the hole, its removal should increase escape times.
+
 ```{r}
 p2p5 <- squidtime %>%
   filter(Trial %in% c("P2", "P5")) %>%
@@ -632,8 +744,10 @@ m_p2p5 <- coxme(
 summary(m_p2p5)
 ```
 
-# P2P5 Distance
-Subsetting
+# P2 vs. P5 — Distance
+
+The beaconing test with path distance as the outcome.
+
 ```{r}
 p2p5dist <- squiddist %>%
   filter(Trial %in% c("P2", "P5")) %>%
@@ -663,8 +777,20 @@ m_p2p5dist <- coxme(
 summary(m_p2p5dist)
 ```
 
-# LInear models for each 
-## Time
+
+Exponentiating the model coefficient gives the hazard ratio for P5 relative to P2 on the distance outcome.
+
+```{r}
+exp(m_p2p5dist$coefficients)
+```
+
+
+# Linear models for each procedure
+
+## Time — all procedures
+
+As a complement to the survival analysis, these simple linear regressions check for within-procedure learning effects (escape time vs. Run) across **all five procedures**. A significant negative slope indicates improvement across the 5 runs within that procedure.
+
 ```{r}
 colnames(squidtime)
 summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])))
@@ -675,13 +801,18 @@ summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P5",])))
 
 ```
 
+Visual check for P3.
+
 ```{r}
 P3.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
 plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
 abline(P3.lm)
 ```
 
-## Dist
+## Distance — all procedures
+
+Same approach for path length across all five procedures.
+
 ```{r}
 summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P1",])))
 summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])))
@@ -689,6 +820,14 @@ summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P3",])))
 summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])))
 summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])))
 
+```
+
+Visual checks for selected procedures.
+
+```{r}
+P2dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
+abline(P2dist.lm)
 ```
 
 ```{r}
@@ -705,9 +844,15 @@ abline(P5dist.lm)
 ```
 
 
+Quick peek at the structure of the combined dataset.
+
 ```{r}
 head(squidtime)
 ```
+
+## Grand Cox model: Trial × Run interaction
+
+This mixed-effects Cox model includes **Trial**, **Run**, and their interaction as fixed effects, excluding P1 (red light baseline). It asks a comprehensive question: does the learning trajectory (slope of Run) differ across procedures? A significant Trial × Run interaction would indicate that within-procedure learning rates depend on which navigational cues are available.
 
 ```{r}
 grand.m <- coxme(
@@ -719,7 +864,10 @@ grand.m <- coxme(
 summary(grand.m)
 ```
 
-# Does grand run improve fit?
+# Does GrandRun (global experience) improve fit?
+
+This tests whether a **global learning effect** across the entire experiment (GrandRun) improves the model compared to a null model with only random effects. In other words, do squids become generally better at the escape task regardless of which procedure they're in?
+
 ```{r}
 m0 <- coxme(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ (1 | Tank/Squid),
             data = squidtime)
@@ -731,9 +879,15 @@ anova(m0, m1)   # tests whether adding GrandRun improves fit
 
 ```
 
+Summary of the model with GrandRun as a fixed effect. A negative coefficient for GrandRun means that for each successive trial (regardless of procedure), the hazard of escape increases — i.e., the squid escapes faster.
+
 ```{r}
 summary(m1)
 ```
+
+## Within-trial Cox models (P2–P5)
+
+For each procedure individually (excluding P1), fit a Cox model of escape time against Run with a random intercept for Tank/Squid. This provides procedure-specific estimates of the **within-procedure learning rate** — the per-run change in escape hazard within that procedure. A positive coefficient for Run means escape hazard increases (escape time decreases) across successive runs.
 
 ```{r}
 
@@ -751,7 +905,13 @@ mP5 <- fit_within_trial("P5")
 summary(mP2); summary(mP3); summary(mP4); summary(mP5)
 
 ```
-# Making figure of relative hazard of time by run
+# Figure: Relative escape hazard by run — time
+
+This is the key visualization for the **learning curve** question. For each procedure, a within-trial Cox model is fit (escape time ~ Run, with random intercept for Tank/Squid), and the **log₂ relative hazard** is plotted for Runs 1–5 relative to Run 1 (reference).
+
+The y-axis shows the log₂-transformed hazard ratio. Values above 0 mean the escape hazard is higher (squid escapes faster) relative to Run 1; values below 0 mean lower hazard (slower escape). A positive slope across runs indicates learning — the squid is increasingly likely to escape sooner with each successive run within that procedure.
+
+The helper function `get_logrelhaz_by_run` fits the model and computes the linear predictor and 95% confidence intervals for each run. Standard errors scale with the distance from the reference run.
 
 ```{r}
 library(coxme)
@@ -854,7 +1014,9 @@ dev.off()
 
 ```
 
-# Making figure of relative hazard of distance by run
+# Figure: Relative escape hazard by run — distance
+
+Same as the time-based figure above, but using **path distance** as the survival outcome. This tells us whether the **efficiency of the escape route** (not just speed) improves across runs within each procedure.
 
 ```{r}
 library(coxme)
@@ -957,7 +1119,18 @@ dev.off()
 
 ```
 
-# making time survival curves for P3-P5 versus P2
+# Figure: Time survival curves — P2 vs. P3/P4/P5
+
+This 3-panel figure visualizes the **cumulative proportion escaped** (event = 1 − survival) for each navigation-manipulation procedure (P3, P4, P5) compared against the P2 white-light baseline. Each panel shows two Kaplan–Meier curves with shaded 95% confidence bands.
+
+The `plot_pair_km()` function:
+1. Fits a Kaplan–Meier estimator of survival stratified by Trial
+2. Converts to the event scale (proportion escaped)
+3. Truncates curves at `tmax = 600` s (the 10-minute trial cutoff) and extends flat to the limit for clean polygons
+4. Draws shaded confidence bands and step-function estimate lines
+
+The `step_xy()` helper converts a step function (time, value) into alternating x-y coordinates suitable for `polygon()` and `lines()`.
+
 ```{r}
 library(survival)
 
@@ -1052,6 +1225,9 @@ plot_pair_km <- function(dat, trial_levels, main_title,
 
 }
 
+ltys <- c(1, 2)
+line_cols <- c("#6cc0a8", "#5A4B62")
+
 # ---- Build the 3-panel figure: P2 vs P3, P2 vs P4, P2 vs P5 ----
 png("P2_vs_P3P4P5_3panel.png", width = 12, height = 8, units = "in", res = 300)
 par(bg="white", mfrow = c(1,3), mar = c(4,4,3,1), mgp = c(2,0.7,0))
@@ -1086,7 +1262,12 @@ dev.off()
 
 ```
 
-# making distance survival curves for P3-P5 versus P2
+# Figure: Distance survival curves — P2 vs. P3/P4/P5
+
+Same 3-panel layout as the time figure, but now using **path distance** as the survival variable. The x-axis label is corrected to "Distance traveled (cm)" (unlike the P1P2 distance comparison, which retained the time label by mistake). The y-axis shows the cumulative proportion of squids that have escaped by a given distance traveled.
+
+A key difference from the time version: the function here does NOT truncate at 600 cm, because distance has no natural cutoff analogous to the 10-minute time limit. The x-axis limit is determined by the maximum observed distance. Confidence bands are only drawn where CI bounds are valid (non-NA), which avoids gaps at the right tail where few observations remain.
+
 ```{r}
 library(survival)
 
@@ -1102,7 +1283,6 @@ step_xy <- function(t, y, x0 = 0, y0 = 0) {
 
 # Plot one panel: KM curves (proportion escaped) for a pair of trials, with shaded CI
 plot_pair_km <- function(dat, trial_levels, main_title,
-                         tmax = 600,
                          line_cols = c("#6cc0a8", "#5A4B62"),
                          ltys = c(1, 2),
                          alpha = 0.20) {
@@ -1113,18 +1293,21 @@ plot_pair_km <- function(dat, trial_levels, main_title,
 
   fill_cols <- adjustcolor(line_cols, alpha.f = alpha)
 
+  # Set x-axis limit from data
+  xmax <- max(fit$time)
+
   # Empty canvas
   plot(0, 0, type = "n",
-       xlim = c(0, tmax),
+       xlim = c(0, xmax),
        ylim = c(0, 1),
        xlab = "Distance traveled (cm)",
        ylab = "Cumulative proportion escaped",
-       cex.lab=1.3,
+       main = main_title,
+       cex.lab = 1.3,
        axes = FALSE)
   axis(1)
   axis(2, las = 1)
   box()
-  abline(v = tmax, lty = 3)
 
   # Draw each stratum (2 curves)
   ncurves <- length(fit$strata)
@@ -1138,48 +1321,34 @@ plot_pair_km <- function(dat, trial_levels, main_title,
     lower <- fit$lower[idx:(idx + n_i - 1)]
     upper <- fit$upper[idx:(idx + n_i - 1)]
 
-    # Advance idx now so we don't forget on early 'next'
     idx <- idx + n_i
 
     if (length(t) == 0) next
 
-    # ---- FIX: truncate everything to tmax for clean polygons ----
-    keep <- t <= tmax
-    t     <- t[keep]
-    surv  <- surv[keep]
-    lower <- lower[keep]
-    upper <- upper[keep]
-
-    if (length(t) == 0) next
-
-    # Ensure curve ends exactly at tmax (flat extension)
-    if (max(t) < tmax) {
-      t <- c(t, tmax)
-      surv  <- c(surv,  tail(surv,  1))
-      lower <- c(lower, tail(lower, 1))
-      upper <- c(upper, tail(upper, 1))
-    }
-
     # event scale: proportion escaped = 1 - S(t)
     event    <- 1 - surv
-    event_lo <- 1 - upper   # swapped for correct CI on event scale
+    event_lo <- 1 - upper
     event_hi <- 1 - lower
 
-    # Step coords for CI band
-    lo <- step_xy(t, event_lo)
-    hi <- step_xy(t, event_hi)
+    # Only draw CI band and line where CI bounds are valid (not NA)
+    valid <- !is.na(event_lo) & !is.na(event_hi)
 
-    polygon(c(lo$x, rev(hi$x)),
-            c(lo$y, rev(hi$y)),
-            col = fill_cols[i], border = NA)
+    if (sum(valid) > 1) {
+      lo <- step_xy(t[valid], event_lo[valid])
+      hi <- step_xy(t[valid], event_hi[valid])
 
-    # Step coords for estimate
-    est <- step_xy(t, event)
-    lines(est$x, est$y, lwd = 2, lty = ltys[i], col = line_cols[i])
+      polygon(c(lo$x, rev(hi$x)),
+              c(lo$y, rev(hi$y)),
+              col = fill_cols[i], border = NA)
+
+      est <- step_xy(t[valid], event[valid])
+      lines(est$x, est$y, lwd = 2, lty = ltys[i], col = line_cols[i])
+    }
   }
-
-
 }
+
+ltys <- c(1, 2)
+line_cols <- c("#6cc0a8", "#5A4B62")
 
 # ---- Build the 3-panel figure: P2 vs P3, P2 vs P4, P2 vs P5 ----
 png("P2_vs_P3P4P5_Dist_3panel.png", width = 12, height = 8, units = "in", res = 300)
@@ -1187,15 +1356,15 @@ par(bg="white", mfrow = c(1,3), mar = c(4,4,3,1), mgp = c(2,0.7,0))
 
 # P2 vs P3
 dat23 <- subset(squiddist, Trial %in% c("P2","P3"))
-plot_pair_km(dat23, trial_levels = c("P2","P3"), main_title = "P2 vs P3", tmax = 600)
+plot_pair_km(dat23, trial_levels = c("P2","P3"), main_title = "P2 vs P3")
   legend("topleft",
          legend = c("P2: White Light Baseline","P3: Opposite Start Location"),
          lty = ltys, lwd = 2, col = line_cols,
          bty = "n", cex = 0.9)
   
-# P2 vs P4 (handles times > 600 cleanly via truncation)
+# P2 vs P4
 dat24 <- subset(squiddist, Trial %in% c("P2","P4"))
-plot_pair_km(dat24, trial_levels = c("P2","P4"), main_title = "P2 vs P4", tmax = 600)
+plot_pair_km(dat24, trial_levels = c("P2","P4"), main_title = "P2 vs P4")
   legend("topleft",
          legend = c("P2: White Light Baseline","P4: Rearrange Landmarks"),
          lty = ltys, lwd = 2, col = line_cols,
@@ -1203,7 +1372,7 @@ plot_pair_km(dat24, trial_levels = c("P2","P4"), main_title = "P2 vs P4", tmax =
   
 # P2 vs P5
 dat25 <- subset(squiddist, Trial %in% c("P2","P5"))
-plot_pair_km(dat25, trial_levels = c("P2","P5"), main_title = "P2 vs P5", tmax = 600)
+plot_pair_km(dat25, trial_levels = c("P2","P5"), main_title = "P2 vs P5")
   legend("topleft",
          legend = c("P2: White Light Baseline","P5: Remove Beacon"),
          lty = ltys, lwd = 2, col = line_cols,
@@ -1214,3 +1383,42 @@ dev.off()
 
 
 ```
+
+
+
+# Testing proportion escape within trial — logistic regression
+
+This final analysis takes a different approach: instead of modeling *time to escape* (survival), it models the **binary outcome** of whether the squid escaped at all within the 10-minute trial. For each procedure (P1–P5), a **mixed-effects logistic regression** (GLMM with binomial family) is fit: escape success ~ Run + random intercept for Squid.
+
+This addresses a slightly different question: does the *probability* of escaping (rather than the speed of escape) increase with practice across runs? A positive coefficient for Run means the squid is increasingly likely to escape at all — not just faster.
+
+Note: this uses `squiddist` (distance data) rather than `squidtime` (time data) because the escape column in `squiddist` uses a cleaner `Y`/`N` coding with fewer missing values.
+
+```{r}
+library(lme4)
+
+for(tr in paste0("P", 1:5)) {
+
+  dat <- subset(
+    squiddist,
+    Trial == tr &
+    !is.na(Escape..Y.N.) &
+    !is.na(Run) &
+    !is.na(Squid)
+  )
+
+  dat$escaped <- ifelse(dat$Escape..Y.N. == "Y", 1, 0)
+  dat$Run <- as.numeric(dat$Run)
+
+  mod <- glmer(
+    escaped ~ Run + (1 | Squid),
+    family = binomial,
+    data = dat
+  )
+
+  cat("\n\n==========", tr, "==========\n")
+
+  print(summary(mod)$coefficients["Run", ])
+}
+```
+
