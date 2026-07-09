@@ -2,7 +2,11 @@
 title: "Time to escape"
 author: "Kirt Onthank"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    latex_engine: xelatex
 ---
 
 # Loading Libraries
@@ -17,7 +21,7 @@ This section loads the R packages needed for the entire analysis:
 - **lme4**: Fits generalized linear mixed models (GLMMs), used later for analyzing escape probability (binary outcome).
 - **lmerTest**: Provides p-values for linear mixed models (though not heavily used in this script).
 
-```{r Loading Libraries}
+```{r Loading Libraries,, message=FALSE, warning=FALSE}
 library(xlsx)
 library(dplyr)
 library(coxme)
@@ -54,7 +58,7 @@ P5$Trial="P5"
 squidtime=rbind(P1,P2,P3,P4,P5)
 ```
 
-A second data source — `RAS_FrameSS.ods` — contains the **path distance** (in cm) that each squid swam before reaching the escape hole. These distances were measured by tracking the squid's path from GoPro footage using ImageJ. While `squidtime` tracks *how long* it took to escape, `squiddist` tracks *how far* they swam.
+A second data source, `RAS_FrameSS.ods`, contains the **path distance** (in cm) that each squid swam before reaching the escape hole. These distances were measured by tracking the squid's path from GoPro footage using ImageJ. While `squidtime` tracks *how long* it took to escape, `squiddist` tracks *how far* they swam.
 
 ```{r}
 squiddist=readODS::read_ods("RAS_FrameSS.ods",sheet=1)
@@ -70,9 +74,6 @@ squiddist=squiddist[order(squiddist$`File #`),]
 squiddist=cbind(squiddist,squidtime[,c(2,3,6)])
 
 colnames(squiddist)[c(2,6,8)]=c("Code","path_length_cm","Escape..Y.N.")
-
-colnames(squidtime)
-colnames(squiddist)
 ```
 
 
@@ -105,10 +106,8 @@ squiddist <- squiddist %>%
 A simple linear regression of escape time on Run number for the **P2 (White Light Baseline)** procedure. The ANOVA summary tells us whether there is a significant linear change in escape time over the 5 runs. A negative slope would indicate that squids learned to escape faster with practice. Note that the x-axis label "Run" is mislabeled — squiddist data is used but `squidtime` is referenced.
 
 ```{r}
-colnames(squidtime)
 P2.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])
 summary(aov(P2.lm))
-
 ```
 
 ## P2 learning curve: distance
@@ -116,10 +115,8 @@ summary(aov(P2.lm))
 Same approach, but now testing whether the **path length** (distance swum) changed across runs within P2. Again, a significant ANOVA with a negative slope would suggest the squids learned a more direct route.
 
 ```{r}
-colnames(squiddist)
 P2dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
 summary(aov(P2dist.lm))
-
 ```
 
 
@@ -158,7 +155,6 @@ plot(escape~Run,data=squiddist[squidtime$Trial=="P2",])
 abline(P2esc.lm)
 
 ```
-
 
 
 ## P1 (Red Light Baseline) learning curves
@@ -366,7 +362,7 @@ abline(v = 600, lty = 3)   # optional: show censoring cutoff time
 
 ### Publication figure: P1 vs. P2 — cumulative proportion escaped
 
-This block generates a polished figure saved as `P1P2_Survival.png`. Unlike the quick plot above, this uses `fun = "event"` to show the **cumulative proportion escaped** (i.e., 1 − survival) with confidence intervals. P1 is shown in green (`#6cc0a8`) and P2 in purple (`#5A4B62`).
+This block generates a polished figure saved as `P1P2_Survival.png`. Unlike the quick plot above, this uses `fun = "event"` to show the **cumulative proportion escaped** (i.e., 1 - survival) with confidence intervals. P1 is shown in green (`#6cc0a8`) and P2 in purple (`#5A4B62`).
 
 ```{r}
 p1p2$Trial <- factor(p1p2$Trial, levels = c("P1", "P2"))
@@ -405,7 +401,7 @@ dev.off()
 This block builds a fully custom KM figure from scratch (rather than using `plot.survfit`), because the default plot does not cleanly display confidence intervals on the event scale (cumulative proportion escaped). The `step_xy()` helper function converts survival step functions into coordinates suitable for drawing polygons and lines.
 
 The figure saved as `P1P2_Survival_CI.png` shows:
-- Cumulative escape curves (event = 1 − survival)
+- Cumulative escape curves (event = 1 - survival)
 - Shaded 95% confidence bands (semi-transparent green/purple)
 - The 600 s censoring cutoff as a vertical dashed line
 
@@ -1121,7 +1117,7 @@ dev.off()
 
 # Figure: Time survival curves — P2 vs. P3/P4/P5
 
-This 3-panel figure visualizes the **cumulative proportion escaped** (event = 1 − survival) for each navigation-manipulation procedure (P3, P4, P5) compared against the P2 white-light baseline. Each panel shows two Kaplan–Meier curves with shaded 95% confidence bands.
+This 3-panel figure visualizes the **cumulative proportion escaped** (event = 1 - survival) for each navigation-manipulation procedure (P3, P4, P5) compared against the P2 white-light baseline. Each panel shows two Kaplan–Meier curves with shaded 95% confidence bands.
 
 The `plot_pair_km()` function:
 1. Fits a Kaplan–Meier estimator of survival stratified by Trial
