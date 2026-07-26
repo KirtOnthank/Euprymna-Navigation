@@ -9,7 +9,8 @@ output:
     latex_engine: xelatex
 ---
 
-# Loading Libraries
+# Setup
+## Loading Libraries
 
 This section loads the R packages needed for the entire analysis:
 
@@ -32,7 +33,7 @@ library(lmerTest)
 ```
 
 
-# Loading data
+## Loading data
 
 Data are loaded from the Excel file `E. berryi data.xlsx`, which contains separate sheets for each experimental procedure (P1 through P5). Each sheet holds trial-by-trial observations for individual squids: the time (in seconds) taken to locate and swim through the escape hole in the open-field tank.
 
@@ -77,8 +78,8 @@ colnames(squiddist)[c(2,6,8)]=c("Code","path_length_cm","Escape..Y.N.")
 ```
 
 
-# Learning Curve
 
+# Learning Curves
 ## Assigning run numbers
 
 Within each procedure (trial type), every squid completed 5 repeated runs. This block adds a `Run` column (1–5) to both `squidtime` and `squiddist`, numbering the sequential attempts within each combination of `Tank`, `Squid`, and `Trial`. This allows us later to test whether escape performance improves with practice — i.e., do squids get faster (or more direct) across Runs 1 through 5?
@@ -128,10 +129,10 @@ plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])
 abline(P2.lm)
 ```
 
-Visual inspection: scatterplot of path distance vs. run number for P2, with the regression line. Note that the data argument incorrectly references `squiddist` but the subset filter uses `squidtime` — this appears to be a bug (it will use row indices from `squidtime` to index `squiddist`, which will work accidentally only if the objects have the same row order and dimensions).
+Visual inspection: scatterplot of path distance vs. run number for P2, with the regression line. 
 
 ```{r}
-plot(path_length_cm~Run,data=squiddist[squidtime$Trial=="P2",])
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
 abline(P2dist.lm)
 ```
 
@@ -208,6 +209,73 @@ plot(Time.Observed..sec.~GrandRun,data=squidtime)
 abline(grandrun.lm)
 
 ```
+
+
+
+## Time — all procedures
+
+As a complement to the survival analysis, these simple linear regressions check for within-procedure learning effects (escape time vs. Run) across **all five procedures**. A significant negative slope indicates improvement across the 5 runs within that procedure.
+
+```{r}
+colnames(squidtime)
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P4",])))
+summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P5",])))
+
+```
+
+Visual check for P3.
+
+```{r}
+P3.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
+plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
+abline(P3.lm)
+```
+
+## Distance — all procedures
+
+Same approach for path length across all five procedures.
+
+```{r}
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P1",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P3",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])))
+summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])))
+
+```
+
+Visual checks for selected procedures.
+
+```{r}
+P2dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
+abline(P2dist.lm)
+```
+
+```{r}
+P4dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])
+abline(P4dist.lm)
+```
+
+
+```{r}
+P5dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])
+plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])
+abline(P5dist.lm)
+```
+
+
+Quick peek at the structure of the combined dataset.
+
+```{r}
+head(squidtime)
+```
+
+
 
 
 # Survival Analysis
@@ -640,7 +708,7 @@ dev.off()
 ```
 
 
-# P2 vs. P4 (Rearrange Landmarks) — Time
+## P2 vs. P4 (Rearrange Landmarks) — Time
 
 **P4 tests piloting navigation**: the internal tank objects (rocks, plants) are rearranged while the escape hole location remains the same. If squids use a cognitive map of the landmark layout, this rearrangement should impair performance (longer escape times). The model compares P4 to the P2 baseline.
 
@@ -673,7 +741,7 @@ m_p2p4 <- coxme(
 summary(m_p2p4)
 ```
 
-# P2 vs. P4 — Distance
+## P2 vs. P4 — Distance
 
 The same piloting test, but with path distance as the outcome.
 
@@ -707,7 +775,7 @@ summary(m_p2p4dist)
 ```
 
 
-# P2 vs. P5 (Remove Beacon) — Time
+## P2 vs. P5 (Remove Beacon) — Time
 
 **P5 tests beaconing navigation**: the floating marker (ping pong ball) positioned over the escape hole is removed. If squids were using this marker as a beacon to locate the hole, its removal should increase escape times.
 
@@ -740,7 +808,7 @@ m_p2p5 <- coxme(
 summary(m_p2p5)
 ```
 
-# P2 vs. P5 — Distance
+## P2 vs. P5 — Distance
 
 The beaconing test with path distance as the outcome.
 
@@ -781,70 +849,6 @@ exp(m_p2p5dist$coefficients)
 ```
 
 
-# Linear models for each procedure
-
-## Time — all procedures
-
-As a complement to the survival analysis, these simple linear regressions check for within-procedure learning effects (escape time vs. Run) across **all five procedures**. A significant negative slope indicates improvement across the 5 runs within that procedure.
-
-```{r}
-colnames(squidtime)
-summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P1",])))
-summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P2",])))
-summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])))
-summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P4",])))
-summary(aov(lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P5",])))
-
-```
-
-Visual check for P3.
-
-```{r}
-P3.lm=lm(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
-plot(Time.Observed..sec.~Run,data=squidtime[squidtime$Trial=="P3",])
-abline(P3.lm)
-```
-
-## Distance — all procedures
-
-Same approach for path length across all five procedures.
-
-```{r}
-summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P1",])))
-summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])))
-summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P3",])))
-summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])))
-summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])))
-
-```
-
-Visual checks for selected procedures.
-
-```{r}
-P2dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
-plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P2",])
-abline(P2dist.lm)
-```
-
-```{r}
-P4dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])
-plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P4",])
-abline(P4dist.lm)
-```
-
-
-```{r}
-P5dist.lm=lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])
-plot(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])
-abline(P5dist.lm)
-```
-
-
-Quick peek at the structure of the combined dataset.
-
-```{r}
-head(squidtime)
-```
 
 ## Grand Cox model: Trial × Run interaction
 
@@ -860,7 +864,7 @@ grand.m <- coxme(
 summary(grand.m)
 ```
 
-# Does GrandRun (global experience) improve fit?
+## Does GrandRun (global experience) improve fit?
 
 This tests whether a **global learning effect** across the entire experiment (GrandRun) improves the model compared to a null model with only random effects. In other words, do squids become generally better at the escape task regardless of which procedure they're in?
 
@@ -881,241 +885,7 @@ Summary of the model with GrandRun as a fixed effect. A negative coefficient for
 summary(m1)
 ```
 
-## Within-trial Cox models (P2–P5)
-
-For each procedure individually (excluding P1), fit a Cox model of escape time against Run with a random intercept for Tank/Squid. This provides procedure-specific estimates of the **within-procedure learning rate** — the per-run change in escape hazard within that procedure. A positive coefficient for Run means escape hazard increases (escape time decreases) across successive runs.
-
-```{r}
-
-fit_within_trial <- function(trial_name) {
-  dat <- subset(squidtime, Trial == trial_name)
-  coxme(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ Run + (1 | Tank/Squid),
-        data = dat)
-}
-
-mP2 <- fit_within_trial("P2")
-mP3 <- fit_within_trial("P3")
-mP4 <- fit_within_trial("P4")
-mP5 <- fit_within_trial("P5")
-
-summary(mP2); summary(mP3); summary(mP4); summary(mP5)
-
-```
-# Figure: Relative escape hazard by run — time
-
-This is the key visualization for the **learning curve** question. For each procedure, a within-trial Cox model is fit (escape time ~ Run, with random intercept for Tank/Squid), and the **log₂ relative hazard** is plotted for Runs 1–5 relative to Run 1 (reference).
-
-The y-axis shows the log₂-transformed hazard ratio. Values above 0 mean the escape hazard is higher (squid escapes faster) relative to Run 1; values below 0 mean lower hazard (slower escape). A positive slope across runs indicates learning — the squid is increasingly likely to escape sooner with each successive run within that procedure.
-
-The helper function `get_logrelhaz_by_run` fits the model and computes the linear predictor and 95% confidence intervals for each run. Standard errors scale with the distance from the reference run.
-
-```{r}
-library(coxme)
-library(survival)
-
-# --- settings ---
-trials_to_plot <- c("P1","P2","P3","P4","P5")
-runs <- 1:5
-ref_run <- 1
-titles=c("P1: Red Light Baseline",
-         "P2: White Light Baseline",
-         "P3: Opposite Start Location", #Path Integration
-         "P4: Rearrange Landmarks", #Piloting
-         "P5: Remove Beacon") #Beaconing
-
-shade_col <- adjustcolor("#6cc0a8", alpha.f = 0.25)
-line_col  <- "#6cc0a8"
-
-# Ensure ordering
-squidtime$Trial <- factor(squidtime$Trial, levels = trials_to_plot)
-
-# Helper: fit within-trial model and return log-relative hazard vs Run=1 (+ CI)
-get_logrelhaz_by_run <- function(dat_trial, runs = 1:5, ref_run = 1) {
-
-  m <- coxme(Surv(Time.Observed..sec., Escape..Y.N. == "yes") ~ Run + (1 | Tank/Squid),
-             data = dat_trial)
-
-  b <- as.numeric(fixef(m)["Run"])
-  V <- as.matrix(vcov(m))    # 1x1 (fixed effect Run only)
-
-  d_run <- runs - ref_run
-
-  lp <- b * d_run                         # log relative hazard
-  se_lp <- sqrt(V[1,1]) * abs(d_run)      # SE scales with |Run-ref|
-
-out <- data.frame(
-  Run = runs,
-  lp = lp / log(2),
-  lo = (lp - 1.96 * se_lp) / log(2),
-  hi = (lp + 1.96 * se_lp) / log(2)
-)
-
-  list(model = m, pred = out)
-}
-
-# --- compute predictions for each trial ---
-pred_list <- setNames(vector("list", length(trials_to_plot)), trials_to_plot)
-for (tr in trials_to_plot) {
-  dat_tr <- subset(squidtime, Trial == tr)
-  pred_list[[tr]] <- get_logrelhaz_by_run(dat_tr, runs = runs, ref_run = ref_run)
-}
-
-# --- common y-limits across panels (recommended) ---
-all_lo <- unlist(lapply(pred_list, function(z) z$pred$lo))
-all_hi <- unlist(lapply(pred_list, function(z) z$pred$hi))
-yl <- range(c(all_lo, all_hi), finite = TRUE)
-
-# --- 5-panel layout ---
-png("LogRelHaz_byRun_5panels.png", width = 12, height = 8, units = "in", res = 300)
-par(mfrow = c(2,3), mar = c(4,4,3,1), oma = c(0,0,2,0), bg="white", mgp=c(1.7,0.7,0))
-iter=1
-for (tr in trials_to_plot) {
-  d <- pred_list[[tr]]$pred
-
-  plot(d$Run, d$lp, type = "n",
-       xlim = c(1,5), ylim = yl,
-       xlab = "Run",
-       ylab = expression(Log[2] * " Relative Escape Hazard (vs Run 1)"),
-       cex.lab=1.3,
-       main = titles[iter],
-       axes = FALSE)
-
-  axis(1, at = 1:5)
-  axis(2, las = 1)
-  box()
-  text(1,2.1,"More Likely to Escape →", srt=90,cex=0.7)
-  text(1,-2.1,"← Less Likely to Escape", srt=90, cex=0.7)
-  # Reference line at 0 (same hazard as Run 1)
-  abline(h = 0, lty = 3)
-
-  # Shaded CI band
-  polygon(c(d$Run, rev(d$Run)),
-          c(d$lo,  rev(d$hi)),
-          col = shade_col, border = NA)
-
-  # Estimate line + points
-  lines(d$Run, d$lp, lwd = 2, col = line_col)
-  points(d$Run, d$lp, pch = 16, cex = 0.9, col = line_col)
-  iter=iter+1
-}
-
-# blank 6th panel
-plot.new()
-
-#mtext("Within-trial change in escape hazard across runs (each panel relative to Run 1)",
-#      outer = TRUE, cex = 1.1)
-
-dev.off()
-
-
-```
-
-# Figure: Relative escape hazard by run — distance
-
-Same as the time-based figure above, but using **path distance** as the survival outcome. This tells us whether the **efficiency of the escape route** (not just speed) improves across runs within each procedure.
-
-```{r}
-library(coxme)
-library(survival)
-
-# --- settings ---
-trials_to_plot <- c("P1","P2","P3","P4","P5")
-runs <- 1:5
-ref_run <- 1
-titles=c("P1: Red Light Baseline",
-         "P2: White Light Baseline",
-         "P3: Opposite Start Location", #Path Integration
-         "P4: Rearrange Landmarks", #Piloting
-         "P5: Remove Beacon") #Beaconing
-
-shade_col <- adjustcolor("#6cc0a8", alpha.f = 0.25)
-line_col  <- "#6cc0a8"
-
-# Ensure ordering
-squiddist$Trial <- factor(squiddist$Trial, levels = trials_to_plot)
-
-# Helper: fit within-trial model and return log-relative hazard vs Run=1 (+ CI)
-get_logrelhaz_by_run <- function(dat_trial, runs = 1:5, ref_run = 1) {
-
-  m <- coxme(Surv(path_length_cm, Escape..Y.N. == "Y") ~ Run + (1 | Tank/Squid),
-             data = dat_trial)
-
-  b <- as.numeric(fixef(m)["Run"])
-  V <- as.matrix(vcov(m))    # 1x1 (fixed effect Run only)
-
-  d_run <- runs - ref_run
-
-  lp <- b * d_run                         # log relative hazard
-  se_lp <- sqrt(V[1,1]) * abs(d_run)      # SE scales with |Run-ref|
-
-out <- data.frame(
-  Run = runs,
-  lp = lp / log(2),
-  lo = (lp - 1.96 * se_lp) / log(2),
-  hi = (lp + 1.96 * se_lp) / log(2)
-)
-
-  list(model = m, pred = out)
-}
-
-# --- compute predictions for each trial ---
-pred_list <- setNames(vector("list", length(trials_to_plot)), trials_to_plot)
-for (tr in trials_to_plot) {
-  dat_tr <- subset(squiddist, Trial == tr)
-  pred_list[[tr]] <- get_logrelhaz_by_run(dat_tr, runs = runs, ref_run = ref_run)
-}
-
-# --- common y-limits across panels (recommended) ---
-all_lo <- unlist(lapply(pred_list, function(z) z$pred$lo))
-all_hi <- unlist(lapply(pred_list, function(z) z$pred$hi))
-yl <- range(c(all_lo, all_hi), finite = TRUE)
-
-# --- 5-panel layout ---
-png("LogRelHaz_Dist_byRun_5panels.png", width = 12, height = 8, units = "in", res = 300)
-par(mfrow = c(2,3), mar = c(4,4,3,1), oma = c(0,0,2,0), bg="white", mgp=c(1.7,0.7,0))
-iter=1
-for (tr in trials_to_plot) {
-  d <- pred_list[[tr]]$pred
-
-  plot(d$Run, d$lp, type = "n",
-       xlim = c(1,5), ylim = yl,
-       xlab = "Run",
-       ylab = expression(Log[2] * " Relative Escape Hazard (vs Run 1)"),
-       cex.lab=1.3,
-       main = titles[iter],
-       axes = FALSE)
-
-  axis(1, at = 1:5)
-  axis(2, las = 1)
-  box()
-  text(1,2.1,"More Likely to Escape →", srt=90,cex=0.7)
-  text(1,-2.1,"← Less Likely to Escape", srt=90, cex=0.7)
-  # Reference line at 0 (same hazard as Run 1)
-  abline(h = 0, lty = 3)
-
-  # Shaded CI band
-  polygon(c(d$Run, rev(d$Run)),
-          c(d$lo,  rev(d$hi)),
-          col = shade_col, border = NA)
-
-  # Estimate line + points
-  lines(d$Run, d$lp, lwd = 2, col = line_col)
-  points(d$Run, d$lp, pch = 16, cex = 0.9, col = line_col)
-  iter=iter+1
-}
-
-# blank 6th panel
-plot.new()
-
-#mtext("Within-trial change in escape hazard across runs (each panel relative to Run 1)",
-#      outer = TRUE, cex = 1.1)
-
-dev.off()
-
-
-```
-
-# Figure: Time survival curves — P2 vs. P3/P4/P5
+## Figure: Time survival curves — P2 vs. P3/P4/P5
 
 This 3-panel figure visualizes the **cumulative proportion escaped** (event = 1 - survival) for each navigation-manipulation procedure (P3, P4, P5) compared against the P2 white-light baseline. Each panel shows two Kaplan–Meier curves with shaded 95% confidence bands.
 
@@ -1258,7 +1028,7 @@ dev.off()
 
 ```
 
-# Figure: Distance survival curves — P2 vs. P3/P4/P5
+## Figure: Distance survival curves — P2 vs. P3/P4/P5
 
 Same 3-panel layout as the time figure, but now using **path distance** as the survival variable. The x-axis label is corrected to "Distance traveled (cm)" (unlike the P1P2 distance comparison, which retained the time label by mistake). The y-axis shows the cumulative proportion of squids that have escaped by a given distance traveled.
 
@@ -1380,6 +1150,241 @@ dev.off()
 
 ```
 
+
+
+
+
+# Within-trial Cox models (P2–P5)
+
+For each procedure individually (excluding P1), fit a Cox model of escape time against Run with a random intercept for Tank/Squid. This provides procedure-specific estimates of the **within-procedure learning rate** — the per-run change in escape hazard within that procedure. A positive coefficient for Run means escape hazard increases (escape time decreases) across successive runs.
+
+```{r}
+
+fit_within_trial <- function(trial_name) {
+  dat <- subset(squidtime, Trial == trial_name)
+  coxme(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ Run + (1 | Tank/Squid),
+        data = dat)
+}
+
+mP2 <- fit_within_trial("P2")
+mP3 <- fit_within_trial("P3")
+mP4 <- fit_within_trial("P4")
+mP5 <- fit_within_trial("P5")
+
+summary(mP2); summary(mP3); summary(mP4); summary(mP5)
+
+```
+## Figure: Relative escape hazard by run — time
+
+This is the key visualization for the **learning curve** question. For each procedure, a within-trial Cox model is fit (escape time ~ Run, with random intercept for Tank/Squid), and the **log₂ relative hazard** is plotted for Runs 1–5 relative to Run 1 (reference).
+
+The y-axis shows the log₂-transformed hazard ratio. Values above 0 mean the escape hazard is higher (squid escapes faster) relative to Run 1; values below 0 mean lower hazard (slower escape). A positive slope across runs indicates learning — the squid is increasingly likely to escape sooner with each successive run within that procedure.
+
+The helper function `get_logrelhaz_by_run` fits the model and computes the linear predictor and 95% confidence intervals for each run. Standard errors scale with the distance from the reference run.
+
+```{r}
+
+# --- settings ---
+trials_to_plot <- c("P1","P2","P3","P4","P5")
+runs <- 1:5
+ref_run <- 1
+titles=c("P1: Red Light Baseline",
+         "P2: White Light Baseline",
+         "P3: Opposite Start Location", #Path Integration
+         "P4: Rearrange Landmarks", #Piloting
+         "P5: Remove Beacon") #Beaconing
+
+shade_col <- adjustcolor("#6cc0a8", alpha.f = 0.25)
+line_col  <- "#6cc0a8"
+
+# Ensure ordering
+squidtime$Trial <- factor(squidtime$Trial, levels = trials_to_plot)
+
+# Helper: fit within-trial model and return log-relative hazard vs Run=1 (+ CI)
+get_logrelhaz_by_run <- function(dat_trial, runs = 1:5, ref_run = 1) {
+
+  m <- coxme(Surv(Time.Observed..sec., Escape..Y.N. == "yes") ~ Run + (1 | Tank/Squid),
+             data = dat_trial)
+
+  b <- as.numeric(fixef(m)["Run"])
+  V <- as.matrix(vcov(m))    # 1x1 (fixed effect Run only)
+
+  d_run <- runs - ref_run
+
+  lp <- b * d_run                         # log relative hazard
+  se_lp <- sqrt(V[1,1]) * abs(d_run)      # SE scales with |Run-ref|
+
+out <- data.frame(
+  Run = runs,
+  lp = lp / log(2),
+  lo = (lp - 1.96 * se_lp) / log(2),
+  hi = (lp + 1.96 * se_lp) / log(2)
+)
+
+  list(model = m, pred = out)
+}
+
+# --- compute predictions for each trial ---
+pred_list <- setNames(vector("list", length(trials_to_plot)), trials_to_plot)
+for (tr in trials_to_plot) {
+  dat_tr <- subset(squidtime, Trial == tr)
+  pred_list[[tr]] <- get_logrelhaz_by_run(dat_tr, runs = runs, ref_run = ref_run)
+}
+
+# --- common y-limits across panels (recommended) ---
+all_lo <- unlist(lapply(pred_list, function(z) z$pred$lo))
+all_hi <- unlist(lapply(pred_list, function(z) z$pred$hi))
+yl <- range(c(all_lo, all_hi), finite = TRUE)
+
+# --- 5-panel layout ---
+png("LogRelHaz_byRun_5panels.png", width = 12, height = 8, units = "in", res = 300)
+par(mfrow = c(2,3), mar = c(4,4,3,1), oma = c(0,0,2,0), bg="white", mgp=c(1.7,0.7,0))
+iter=1
+for (tr in trials_to_plot) {
+  d <- pred_list[[tr]]$pred
+
+  plot(d$Run, d$lp, type = "n",
+       xlim = c(1,5), ylim = yl,
+       xlab = "Run",
+       ylab = expression(Log[2] * " Relative Escape Hazard (vs Run 1)"),
+       cex.lab=1.3,
+       main = titles[iter],
+       axes = FALSE)
+
+  axis(1, at = 1:5)
+  axis(2, las = 1)
+  box()
+  text(1,2.1,"More Likely to Escape →", srt=90,cex=0.7)
+  text(1,-2.1,"← Less Likely to Escape", srt=90, cex=0.7)
+  # Reference line at 0 (same hazard as Run 1)
+  abline(h = 0, lty = 3)
+
+  # Shaded CI band
+  polygon(c(d$Run, rev(d$Run)),
+          c(d$lo,  rev(d$hi)),
+          col = shade_col, border = NA)
+
+  # Estimate line + points
+  lines(d$Run, d$lp, lwd = 2, col = line_col)
+  points(d$Run, d$lp, pch = 16, cex = 0.9, col = line_col)
+  iter=iter+1
+}
+
+# blank 6th panel
+plot.new()
+
+#mtext("Within-trial change in escape hazard across runs (each panel relative to Run 1)",
+#      outer = TRUE, cex = 1.1)
+
+dev.off()
+
+
+```
+
+## Figure: Relative escape hazard by run — distance
+
+Same as the time-based figure above, but using **path distance** as the survival outcome. This tells us whether the **efficiency of the escape route** (not just speed) improves across runs within each procedure.
+
+```{r}
+library(coxme)
+library(survival)
+
+# --- settings ---
+trials_to_plot <- c("P1","P2","P3","P4","P5")
+runs <- 1:5
+ref_run <- 1
+titles=c("P1: Red Light Baseline",
+         "P2: White Light Baseline",
+         "P3: Opposite Start Location", #Path Integration
+         "P4: Rearrange Landmarks", #Piloting
+         "P5: Remove Beacon") #Beaconing
+
+shade_col <- adjustcolor("#6cc0a8", alpha.f = 0.25)
+line_col  <- "#6cc0a8"
+
+# Ensure ordering
+squiddist$Trial <- factor(squiddist$Trial, levels = trials_to_plot)
+
+# Helper: fit within-trial model and return log-relative hazard vs Run=1 (+ CI)
+get_logrelhaz_by_run <- function(dat_trial, runs = 1:5, ref_run = 1) {
+
+  m <- coxme(Surv(path_length_cm, Escape..Y.N. == "Y") ~ Run + (1 | Tank/Squid),
+             data = dat_trial)
+
+  b <- as.numeric(fixef(m)["Run"])
+  V <- as.matrix(vcov(m))    # 1x1 (fixed effect Run only)
+
+  d_run <- runs - ref_run
+
+  lp <- b * d_run                         # log relative hazard
+  se_lp <- sqrt(V[1,1]) * abs(d_run)      # SE scales with |Run-ref|
+
+out <- data.frame(
+  Run = runs,
+  lp = lp / log(2),
+  lo = (lp - 1.96 * se_lp) / log(2),
+  hi = (lp + 1.96 * se_lp) / log(2)
+)
+
+  list(model = m, pred = out)
+}
+
+# --- compute predictions for each trial ---
+pred_list <- setNames(vector("list", length(trials_to_plot)), trials_to_plot)
+for (tr in trials_to_plot) {
+  dat_tr <- subset(squiddist, Trial == tr)
+  pred_list[[tr]] <- get_logrelhaz_by_run(dat_tr, runs = runs, ref_run = ref_run)
+}
+
+# --- common y-limits across panels (recommended) ---
+all_lo <- unlist(lapply(pred_list, function(z) z$pred$lo))
+all_hi <- unlist(lapply(pred_list, function(z) z$pred$hi))
+yl <- range(c(all_lo, all_hi), finite = TRUE)
+
+# --- 5-panel layout ---
+png("LogRelHaz_Dist_byRun_5panels.png", width = 12, height = 8, units = "in", res = 300)
+par(mfrow = c(2,3), mar = c(4,4,3,1), oma = c(0,0,2,0), bg="white", mgp=c(1.7,0.7,0))
+iter=1
+for (tr in trials_to_plot) {
+  d <- pred_list[[tr]]$pred
+
+  plot(d$Run, d$lp, type = "n",
+       xlim = c(1,5), ylim = yl,
+       xlab = "Run",
+       ylab = expression(Log[2] * " Relative Escape Hazard (vs Run 1)"),
+       cex.lab=1.3,
+       main = titles[iter],
+       axes = FALSE)
+
+  axis(1, at = 1:5)
+  axis(2, las = 1)
+  box()
+  text(1,2.1,"More Likely to Escape →", srt=90,cex=0.7)
+  text(1,-2.1,"← Less Likely to Escape", srt=90, cex=0.7)
+  # Reference line at 0 (same hazard as Run 1)
+  abline(h = 0, lty = 3)
+
+  # Shaded CI band
+  polygon(c(d$Run, rev(d$Run)),
+          c(d$lo,  rev(d$hi)),
+          col = shade_col, border = NA)
+
+  # Estimate line + points
+  lines(d$Run, d$lp, lwd = 2, col = line_col)
+  points(d$Run, d$lp, pch = 16, cex = 0.9, col = line_col)
+  iter=iter+1
+}
+
+# blank 6th panel
+plot.new()
+
+#mtext("Within-trial change in escape hazard across runs (each panel relative to Run 1)",
+#      outer = TRUE, cex = 1.1)
+
+dev.off()
+
+
+```
 
 
 # Testing proportion escape within trial — logistic regression
