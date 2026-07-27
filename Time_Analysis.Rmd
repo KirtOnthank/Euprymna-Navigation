@@ -250,6 +250,47 @@ summary(aov(lm(path_length_cm~Run,data=squiddist[squiddist$Trial=="P5",])))
 
 ```
 
+## Summary: Linear model learning curves
+
+This table reports the p-values from linear regressions of escape time and path length on Run for each procedure. A significant p-value indicates a linear trend across the 5 runs within that procedure. An asterisk after the p-value indicates significance at the 0.05 level.
+
+```{r table0-linear-model-learning-curves, message=FALSE, warning=FALSE}
+format_p <- function(p) {
+  p_text <- ifelse(is.na(p), "NA",
+                   ifelse(p < 0.001, "<0.001", formatC(p, format = "f", digits = 3)))
+  sig <- !is.na(p) & p < 0.05
+  result <- cell_spec(p_text, format = "latex", bold = sig)
+  ifelse(sig, paste0(result, "*"), result)
+}
+
+lm_pvals <- data.frame(
+  Procedure = paste0("P", 1:5),
+  Time_P = sapply(paste0("P", 1:5), function(tr) {
+    m <- lm(Time.Observed..sec. ~ Run, data = squidtime[squidtime$Trial == tr, ])
+    summary(aov(m))[[1]]["Run", "Pr(>F)"]
+  }),
+  Dist_P = sapply(paste0("P", 1:5), function(tr) {
+    m <- lm(path_length_cm ~ Run, data = squiddist[squiddist$Trial == tr, ])
+    summary(aov(m))[[1]]["Run", "Pr(>F)"]
+  })
+)
+
+kbl(
+  data.frame(
+    Procedure = lm_pvals$Procedure,
+    Time_P = format_p(lm_pvals$Time_P),
+    Dist_P = format_p(lm_pvals$Dist_P)
+  ),
+  col.names = c("Procedure", "Time P-value", "Dist P-value"),
+  format = "latex",
+  escape = FALSE,
+  caption = "Linear model learning curves (escape time and path length ~ Run).",
+  align = c("l", "c", "c")
+) |>
+  kable_styling(full_width = FALSE, latex_options = "hold_position") |>
+  column_spec(1, bold = TRUE)
+```
+
 Visual checks for selected procedures.
 
 ```{r}
@@ -514,19 +555,11 @@ dev.off()
 
 ```
 
-### Summary: Within-procedure learning curves
+## Summary: Within-procedure learning curves
 
 This table reports the p-values for the Run effect from the Cox mixed-effects models fit above for each procedure. Time models used `mP2`–`mP5`; distance models used the models returned by `get_logrelhaz_by_run()`. A significant p-value indicates that escape time or distance changed across runs within that procedure. An asterisk after the p-value indicates significance at the 0.05 level.
 
 ```{r table2-within-procedure-cox, message=FALSE, warning=FALSE}
-format_p <- function(p) {
-  p_text <- ifelse(is.na(p), "NA",
-                   ifelse(p < 0.001, "<0.001", formatC(p, format = "f", digits = 3)))
-  sig <- !is.na(p) & p < 0.05
-  result <- cell_spec(p_text, format = "latex", bold = sig)
-  ifelse(sig, paste0(result, "*"), result)
-}
-
 cox_within <- data.frame(
   Procedure = paste0("P", 1:5),
   Time_P = c(NA, sapply(list(mP2, mP3, mP4, mP5), function(m) {
@@ -1146,7 +1179,7 @@ Exponentiating the model coefficient gives the hazard ratio for P5 relative to P
 exp(m_p2p5dist$coefficients)
 ```
 
-### Summary: Between-procedure comparisons
+## Summary: Between-procedure comparisons
 
 This table reports the p-values for the Trial effect from the Cox mixed-effects models comparing pairs of procedures. A significant p-value indicates that escape time or distance differed between the two procedures. An asterisk after the p-value indicates significance at the 0.05 level.
 
@@ -1509,7 +1542,7 @@ for(tr in paste0("P", 1:5)) {
 }
 ```
 
-### Summary: Escape frequency across runs
+## Summary: Escape frequency across runs
 
 This table reports the effect of Run on the probability of escaping (binary outcome) from the mixed-effects logistic regression. The slope is the logistic regression coefficient for Run on the log-odds scale; a positive slope indicates that escape probability increases with repeated runs. An asterisk after the p-value indicates significance at the 0.05 level.
 
