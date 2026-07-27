@@ -263,29 +263,34 @@ format_p <- function(p) {
   ifelse(sig, paste0(result, "*"), result)
 }
 
+lm_time_models <- lapply(paste0("P", 1:5), function(tr) {
+  lm(Time.Observed..sec. ~ Run, data = squidtime[squidtime$Trial == tr, ])
+})
+lm_dist_models <- lapply(paste0("P", 1:5), function(tr) {
+  lm(path_length_cm ~ Run, data = squiddist[squiddist$Trial == tr, ])
+})
+
 lm_pvals <- data.frame(
   Procedure = paste0("P", 1:5),
-  Time_P = sapply(paste0("P", 1:5), function(tr) {
-    m <- lm(Time.Observed..sec. ~ Run, data = squidtime[squidtime$Trial == tr, ])
-    summary(aov(m))[[1]]["Run", "Pr(>F)"]
-  }),
-  Dist_P = sapply(paste0("P", 1:5), function(tr) {
-    m <- lm(path_length_cm ~ Run, data = squiddist[squiddist$Trial == tr, ])
-    summary(aov(m))[[1]]["Run", "Pr(>F)"]
-  })
+  Time_Slope = sapply(lm_time_models, function(m) round(coefficients(m)["Run"], 3)),
+  Time_P = sapply(lm_time_models, function(m) summary(aov(m))[[1]]["Run", "Pr(>F)"]),
+  Dist_Slope = sapply(lm_dist_models, function(m) round(coefficients(m)["Run"], 3)),
+  Dist_P = sapply(lm_dist_models, function(m) summary(aov(m))[[1]]["Run", "Pr(>F)"])
 )
 
 kbl(
   data.frame(
     Procedure = lm_pvals$Procedure,
+    Time_Slope = lm_pvals$Time_Slope,
     Time_P = format_p(lm_pvals$Time_P),
+    Dist_Slope = lm_pvals$Dist_Slope,
     Dist_P = format_p(lm_pvals$Dist_P)
   ),
-  col.names = c("Procedure", "Time P-value", "Dist P-value"),
+  col.names = c("Procedure", "Time Slope", "Time P-value", "Dist Slope", "Dist P-value"),
   format = "latex",
   escape = FALSE,
   caption = "Linear model learning curves (escape time and path length ~ Run).",
-  align = c("l", "c", "c")
+  align = c("l", "c", "c", "c", "c")
 ) |>
   kable_styling(full_width = FALSE, latex_options = "hold_position") |>
   column_spec(1, bold = TRUE)
