@@ -514,6 +514,44 @@ dev.off()
 
 ```
 
+### Summary: Within-procedure learning curves
+
+This table reports the p-values for the Run effect from the Cox mixed-effects models fit above for each procedure. Time models used `mP2`–`mP5`; distance models used the models returned by `get_logrelhaz_by_run()`. A significant p-value indicates that escape time or distance changed across runs within that procedure. An asterisk after the p-value indicates significance at the 0.05 level.
+
+```{r table2-within-procedure-cox, message=FALSE, warning=FALSE}
+format_p <- function(p) {
+  p_text <- ifelse(is.na(p), "NA",
+                   ifelse(p < 0.001, "<0.001", formatC(p, format = "f", digits = 3)))
+  sig <- !is.na(p) & p < 0.05
+  result <- cell_spec(p_text, format = "latex", bold = sig)
+  ifelse(sig, paste0(result, "*"), result)
+}
+
+cox_within <- data.frame(
+  Procedure = paste0("P", 1:5),
+  Time_P = c(NA, sapply(list(mP2, mP3, mP4, mP5), function(m) {
+    tryCatch(summary(m)$coefficients["Run", "p"], error = function(e) NA)
+  })),
+  Dist_P = sapply(paste0("P", 1:5), function(tr) {
+    tryCatch(summary(pred_list[[tr]]$model)$coefficients["Run", "p"], error = function(e) NA)
+  })
+)
+
+kbl(
+  data.frame(
+    Procedure = cox_within$Procedure,
+    Time_P = format_p(cox_within$Time_P),
+    Dist_P = format_p(cox_within$Dist_P)
+  ),
+  col.names = c("Procedure", "Time P-value", "Dist P-value"),
+  format = "latex",
+  escape = FALSE,
+  caption = "Within-procedure learning curves from Cox mixed-effects models.",
+  align = c("l", "c", "c")
+) |>
+  kable_styling(full_width = FALSE, latex_options = "hold_position") |>
+  column_spec(1, bold = TRUE)
+```
 
 
 ### Does GrandRun (global experience) improve fit?
@@ -1108,6 +1146,45 @@ Exponentiating the model coefficient gives the hazard ratio for P5 relative to P
 exp(m_p2p5dist$coefficients)
 ```
 
+### Summary: Between-procedure comparisons
+
+This table reports the p-values for the Trial effect from the Cox mixed-effects models comparing pairs of procedures. A significant p-value indicates that escape time or distance differed between the two procedures. An asterisk after the p-value indicates significance at the 0.05 level.
+
+```{r table3-between-procedure-cox, message=FALSE, warning=FALSE}
+cox_btwn <- data.frame(
+  Comparison = c("P1 vs P2", "P3 vs P2", "P4 vs P2", "P5 vs P2"),
+  Time_P = sapply(list(m_p1p2, m_p2p3, m_p2p4, m_p2p5), function(m) {
+    tryCatch({
+      coefs <- summary(m)$coefficients
+      trial_row <- grep("^Trial", rownames(coefs))
+      if(length(trial_row) == 0) NA else coefs[trial_row, "p"]
+    }, error = function(e) NA)
+  }),
+  Dist_P = sapply(list(m_p1p2dist, m_p2p3dist, m_p2p4dist, m_p2p5dist), function(m) {
+    tryCatch({
+      coefs <- summary(m)$coefficients
+      trial_row <- grep("^Trial", rownames(coefs))
+      if(length(trial_row) == 0) NA else coefs[trial_row, "p"]
+    }, error = function(e) NA)
+  })
+)
+
+kbl(
+  data.frame(
+    Comparison = cox_btwn$Comparison,
+    Time_P = format_p(cox_btwn$Time_P),
+    Dist_P = format_p(cox_btwn$Dist_P)
+  ),
+  col.names = c("Comparison", "Time P-value", "Dist P-value"),
+  format = "latex",
+  escape = FALSE,
+  caption = "Between-procedure comparisons from Cox mixed-effects models.",
+  align = c("l", "c", "c")
+) |>
+  kable_styling(full_width = FALSE, latex_options = "hold_position") |>
+  column_spec(1, bold = TRUE)
+```
+
 
 
 ## Grand Cox model: Trial × Run interaction
@@ -1432,16 +1509,11 @@ for(tr in paste0("P", 1:5)) {
 }
 ```
 
-# Summary Tables
+### Summary: Escape frequency across runs
 
-Three summary tables below present the learning-curve statistics from all analyses. In each table, an asterisk after the p-value indicates significance at the 0.05 level.
-
-## Table 1 — Escape frequency across runs
-
-This table reports the effect of Run on the probability of escaping (binary outcome) from the mixed-effects logistic regression. The slope is the logistic regression coefficient for Run on the log-odds scale; a positive slope indicates that escape probability increases with repeated runs.
+This table reports the effect of Run on the probability of escaping (binary outcome) from the mixed-effects logistic regression. The slope is the logistic regression coefficient for Run on the log-odds scale; a positive slope indicates that escape probability increases with repeated runs. An asterisk after the p-value indicates significance at the 0.05 level.
 
 ```{r table1-escape-frequency, message=FALSE, warning=FALSE}
-# Extract results
 escape_pvals <- sapply(escape_models, function(m) summary(m)$coefficients["Run", "Pr(>|z|)"])
 escape_sig <- !is.na(escape_pvals) & escape_pvals < 0.05
 
@@ -1454,14 +1526,7 @@ table1 <- data.frame(
   row.names = NULL
 )
 
-# Apply cell_spec for bold + asterisk
-table1$P_value <- cell_spec(
-  table1$P_value,
-  format = "latex",
-  bold = escape_sig
-)
-
-# Append asterisk to p-value text for significant results
+table1$P_value <- cell_spec(table1$P_value, format = "latex", bold = escape_sig)
 table1$P_value <- ifelse(escape_sig, paste0(table1$P_value, "*"), table1$P_value)
 
 kbl(
@@ -1469,182 +1534,7 @@ kbl(
   col.names = c("Procedure", "Slope", "P-value"),
   format = "latex",
   escape = FALSE,
-  caption = "Table 1. Effect of Run on escape frequency (binary logistic regression).",
-  align = c("l", "c", "c")
-) |>
-  kable_styling(full_width = FALSE, latex_options = "hold_position") |>
-  column_spec(1, bold = TRUE)
-```
-
-## Table 2 — Within-procedure learning curves
-
-This table reports the p-values for the Run effect from two Cox mixed-effects models fit separately for each procedure. A significant p-value indicates that escape time or distance changed across runs within that procedure.
-
-```{r table2-within-procedure-cox, message=FALSE, warning=FALSE}
-# Fit Cox models for all 5 procedures (time + distance)
-cox_time_models <- list()
-cox_dist_models <- list()
-
-for(tr in paste0("P", 1:5)) {
-
-  # Time models
-  survdat <- subset(squidtime, Trial == tr)
-  survdat$Run <- as.numeric(survdat$Run)
-
-  cox_time_models[[tr]] <- tryCatch(
-    coxme(Surv(Time.Observed..sec., Escape..Y.N.=="yes") ~ Run + (1 | Tank/Squid),
-          data = survdat),
-    error = function(e) NULL
-  )
-
-  # Distance models
-  dat <- subset(squiddist, Trial == tr)
-  dat$Run <- as.numeric(dat$Run)
-
-  cox_dist_models[[tr]] <- tryCatch(
-    coxme(Surv(path_length_cm, Escape..Y.N. == "Y") ~ Run + (1 | Tank/Squid), data = dat),
-    error = function(e) NULL
-  )
-}
-
-# Extract helper: safely get coefficient from coxme model
-safe_cox_coef <- function(m, row = "Run") {
-  tryCatch({
-    if(is.null(m)) return(NA)
-    coefs <- summary(m)$coefficients
-    if(!(row %in% rownames(coefs))) return(NA)
-    coefs[row, "Pr(>|z|)"]
-  }, error = function(e) NA)
-}
-
-safe_cox_slope <- function(m) {
-  tryCatch({
-    if(is.null(m)) return(NA)
-    round(m$coef[[1]], 3)
-  }, error = function(e) NA)
-}
-
-# Extract p-values
-table2 <- data.frame(
-  Procedure = paste0("P", 1:5),
-  Time_Slope = sapply(cox_time_models, safe_cox_slope),
-  Time_P = sapply(cox_time_models, safe_cox_coef),
-  Dist_Slope = sapply(cox_dist_models, safe_cox_slope),
-  Dist_P = sapply(cox_dist_models, safe_cox_coef)
-)
-
-# Format p-values with bold/asterisk
-format_p <- function(p) {
-  p_text <- ifelse(is.na(p), "NA",
-                   ifelse(p < 0.001, "<0.001", formatC(p, format = "f", digits = 3)))
-  sig <- !is.na(p) & p < 0.05
-  result <- cell_spec(
-    p_text,
-    format = "latex",
-    bold = sig
-  )
-  ifelse(sig, paste0(result, "*"), result)
-}
-
-table2$Time_P_text <- format_p(table2$Time_P)
-table2$Dist_P_text <- format_p(table2$Dist_P)
-
-kbl(
-  data.frame(
-    Procedure = table2$Procedure,
-    Time_Slope = table2$Time_Slope,
-    Time_P = table2$Time_P_text,
-    Dist_Slope = table2$Dist_Slope,
-    Dist_P = table2$Dist_P_text
-  ),
-  col.names = c("Procedure", "Time Slope", "Time P-value", "Dist Slope", "Dist P-value"),
-  format = "latex",
-  escape = FALSE,
-  caption = "Table 2. Within-procedure learning curves from Cox mixed-effects models.",
-  align = c("l", "c", "c", "c", "c")
-) |>
-  kable_styling(full_width = FALSE, latex_options = "hold_position") |>
-  column_spec(1, bold = TRUE)
-```
-
-## Table 3 — Between-procedure comparisons
-
-This table reports the p-values for the Trial effect from Cox mixed-effects models comparing pairs of procedures. A significant p-value indicates that escape time or distance differed between the two procedures.
-
-```{r table3-between-procedure-cox, message=FALSE, warning=FALSE}
-# Define procedure pairs
-pairs <- list(
-  "P1 vs P2" = c("P1", "P2"),
-  "P3 vs P2" = c("P3", "P2"),
-  "P4 vs P2" = c("P4", "P2"),
-  "P5 vs P2" = c("P5", "P2")
-)
-
-# Fit between-procedure Cox models
-cox_btwn_time <- list()
-cox_btwn_dist <- list()
-
-for(pair_name in names(pairs)) {
-  pair <- pairs[[pair_name]]
-  tr1 <- pair[1]
-  tr2 <- pair[2]
-
-  # Time models
-  survdat <- subset(squidtime, Trial %in% c(tr1, tr2))
-  survdat$Trial <- factor(survdat$Trial)
-  survdat$Trial <- relevel(survdat$Trial, ref = tr2)
-
-  cox_btwn_time[[pair_name]] <- tryCatch(
-    coxme(Surv(Time.Observed..sec., Escape..Y.N. == "yes") ~ Trial + (1 | Tank/Squid), data = survdat),
-    error = function(e) NULL
-  )
-
-  # Distance models
-  dat <- subset(squiddist, Trial %in% c(tr1, tr2))
-  dat$Trial <- factor(dat$Trial)
-  dat$Trial <- relevel(dat$Trial, ref = tr2)
-
-  cox_btwn_dist[[pair_name]] <- tryCatch(
-    coxme(Surv(path_length_cm, Escape..Y.N. == "Y") ~ Trial + (1 | Tank/Squid), data = dat),
-    error = function(e) NULL
-  )
-}
-
-# Extract p-values (Trial coefficient)
-get_btwn_p <- function(models) {
-  sapply(models, function(m) {
-    tryCatch({
-      if(is.null(m)) return(NA)
-      coefs <- summary(m)$coefficients
-      trial_row <- grep("^Trial", rownames(coefs))
-      trial_row <- trial_row[!grepl("TrialRun", rownames(coefs)[trial_row])]
-      if(length(trial_row) == 0) return(NA)
-      if(!"Pr(>|z|)" %in% colnames(coefs)) return(NA)
-      coefs[trial_row, "Pr(>|z|)"]
-    }, error = function(e) NA)
-  })
-}
-
-table3 <- data.frame(
-  Comparison = names(pairs),
-  Time_P = get_btwn_p(cox_btwn_time),
-  Dist_P = get_btwn_p(cox_btwn_dist)
-)
-
-# Format p-values
-table3$Time_P_text <- format_p(table3$Time_P)
-table3$Dist_P_text <- format_p(table3$Dist_P)
-
-kbl(
-  data.frame(
-    Comparison = table3$Comparison,
-    Time_P = table3$Time_P_text,
-    Dist_P = table3$Dist_P_text
-  ),
-  col.names = c("Comparison", "Time P-value", "Dist P-value"),
-  format = "latex",
-  escape = FALSE,
-  caption = "Table 3. Between-procedure comparisons from Cox mixed-effects models.",
+  caption = "Effect of Run on escape frequency (binary logistic regression).",
   align = c("l", "c", "c")
 ) |>
   kable_styling(full_width = FALSE, latex_options = "hold_position") |>
