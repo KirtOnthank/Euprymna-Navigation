@@ -340,6 +340,7 @@ fit_within_trial <- function(trial_name) {
         data = dat)
 }
 
+mP1 <- fit_within_trial("P1")
 mP2 <- fit_within_trial("P2")
 mP3 <- fit_within_trial("P3")
 mP4 <- fit_within_trial("P4")
@@ -348,6 +349,7 @@ mP5 <- fit_within_trial("P5")
 summary(mP2); summary(mP3); summary(mP4); summary(mP5)
 
 ```
+
 ### Figure: Relative escape hazard by run — time
 
 This is the key visualization for the **learning curve** question. For each procedure, a within-trial Cox model is fit (escape time ~ Run, with random intercept for Tank/Squid), and the **log₂ relative hazard** is plotted for Runs 1–5 relative to Run 1 (reference).
@@ -452,12 +454,14 @@ plot.new()
 
 dev.off()
 
-
 ```
 
-### Figure: Relative escape hazard by run — distance
+
+![Within-trial Cox: log-relative hazard by run — time (5 panels)](LogRelHaz_byRun_5panels.png)
 
 Same as the time-based figure above, but using **path distance** as the survival outcome. This tells us whether the **efficiency of the escape route** (not just speed) improves across runs within each procedure.
+
+### Figure: Relative escape hazard by run — distance
 
 ```{r}
 library(coxme)
@@ -557,8 +561,10 @@ plot.new()
 
 dev.off()
 
-
 ```
+
+
+![Within-trial Cox: log-relative hazard by run — distance (5 panels)](LogRelHaz_Dist_byRun_5panels.png)
 
 ## Summary: Within-procedure learning curves
 
@@ -567,9 +573,9 @@ This table reports the p-values for the Run effect from the Cox mixed-effects mo
 ```{r table2-within-procedure-cox, message=FALSE, warning=FALSE}
 cox_within <- data.frame(
   Procedure = paste0("P", 1:5),
-  Time_P = c(NA, sapply(list(mP2, mP3, mP4, mP5), function(m) {
+  Time_P = sapply(list(mP1, mP2, mP3, mP4, mP5), function(m) {
     tryCatch(summary(m)$coefficients["Run", "p"], error = function(e) NA)
-  })),
+  }),
   Dist_P = sapply(paste0("P", 1:5), function(tr) {
     tryCatch(summary(pred_list[[tr]]$model)$coefficients["Run", "p"], error = function(e) NA)
   })
@@ -764,42 +770,6 @@ abline(v = 600, lty = 3)   # optional: show censoring cutoff time
 
 ```
 
-### Publication figure: P1 vs. P2 — cumulative proportion escaped
-
-This block generates a polished figure saved as `P1P2_Survival.png`. Unlike the quick plot above, this uses `fun = "event"` to show the **cumulative proportion escaped** (i.e., 1 - survival) with confidence intervals. P1 is shown in green (`#6cc0a8`) and P2 in purple (`#5A4B62`).
-
-```{r}
-p1p2$Trial <- factor(p1p2$Trial, levels = c("P1", "P2"))
-# Kaplan–Meier curves by Trial (descriptive)
-km_p1p2 <- survfit(Surv(Time.Observed..sec., event) ~ Trial, data = p1p2)
-
-png("P1P2_Survival.png",width=9,height=9,units = "in",res = 300)
-par(bg="white")
-plot(km_p1p2,
-     fun = "event",conf.int=TRUE,      # plots 1 - S(t)
-     xlab = "Time observed (s)",
-     ylab = "Cumulative Proportion escaped",
-     xlim = c(0, 600),
-     mark.time = TRUE,
-     lwd = 2,
-     lty = c(1, 2),
-     col = c("#6cc0a8", "#5A4B62"),
-     axes=F)
-
-legend("topleft",
-       legend = levels(p1p2$Trial),
-       lty = c(1, 2),
-       lwd = 2,
-       col = c("#6cc0a8", "#5A4B62"),
-       bty = "n")
-
-abline(v = 600, lty = 3)
-axis(1)
-axis(2)
-dev.off()
-```
-
-
 ### Custom CI figure: P1 vs. P2 — cumulative escaped with shaded confidence bands
 
 This block builds a fully custom KM figure from scratch (rather than using `plot.survfit`), because the default plot does not cleanly display confidence intervals on the event scale (cumulative proportion escaped). The `step_xy()` helper function converts survival step functions into coordinates suitable for drawing polygons and lines.
@@ -894,6 +864,8 @@ legend("topleft",
 dev.off()
 
 ```
+
+![P1 vs. P2: Cumulative proportion escaped with 95% CI](P1P2_Survival_CI.png)
 
 ## P1 vs. P2 — Distance
 
@@ -1042,6 +1014,8 @@ legend("topleft",
 dev.off()
 
 ```
+
+![P1 vs. P2: Distance survival with 95% CI](P1P2dist_Survival_CI.png)
 
 
 ## P2 vs. P4 (Rearrange Landmarks) — Time
@@ -1389,6 +1363,8 @@ dev.off()
 
 ```
 
+![P2 vs. P3/P4/P5: Time survival curves (3 panels)](P2_vs_P3P4P5_3panel.png)
+
 ## Figure: Distance survival curves — P2 vs. P3/P4/P5
 
 Same 3-panel layout as the time figure, but now using **path distance** as the survival variable. The x-axis label is corrected to "Distance traveled (cm)" (unlike the P1P2 distance comparison, which retained the time label by mistake). The y-axis shows the cumulative proportion of squids that have escaped by a given distance traveled.
@@ -1510,6 +1486,8 @@ dev.off()
 
 
 ```
+
+![P2 vs. P3/P4/P5: Distance survival curves (3 panels)](P2_vs_P3P4P5_Dist_3panel.png)
 
 
 
